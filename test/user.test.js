@@ -887,22 +887,7 @@ describe('User', function() {
       });
     });
 
-    it('does not login a user with unverified email but provides userId', function(done) {
-      User.login(validCredentials, function(err, accessToken) {
-        err = Object.assign({}, err);
-        expect(err).to.eql({
-          statusCode: 401,
-          code: 'LOGIN_FAILED_EMAIL_NOT_VERIFIED',
-          details: {
-            userId: validCredentialsUser.pk,
-          },
-        });
-        done();
-      });
-    });
-
-    it('does not login a user with unverified email but provides userId ' +
-      '- promise variant', function() {
+    it('does not login a user with unverified email but provides userId', function() {
       return User.login(validCredentials).then(
         function(user) {
           throw new Error('User.login() should have failed');
@@ -991,7 +976,19 @@ describe('User', function() {
           if (err) return done(err);
 
           var errorResponse = res.body.error;
-          assert.equal(errorResponse.code, 'LOGIN_FAILED_EMAIL_NOT_VERIFIED');
+
+          // extracting code and details error response
+          let errorExcerpts = {
+            code: errorResponse.code,
+            details: errorResponse.details,
+          };
+
+          expect(errorExcerpts).to.eql({
+            code: 'LOGIN_FAILED_EMAIL_NOT_VERIFIED',
+            details: {
+              userId: validCredentialsUser.pk,
+            },
+          });
 
           done();
         });
@@ -2089,68 +2086,6 @@ describe('User', function() {
           .post('/test-users/' + 'invalid-id' + '/verify')
           .expect('Content-Type', /json/)
           .expect(404);
-      });
-    });
-
-    describe('User.verify(id)', function() {
-      it('triggers user identity verification', function() {
-        const verifyOptions = User.getVerifyOptions();
-
-        return User.create({email: 'bar@bat.com', password: 'bar'})
-        .then(user => {
-          return User.verify(user.pk, verifyOptions);
-        })
-        .then(res => {
-          // No need to redo all the tests already done in the user.verify()
-          // prototype method: just doing a partial check to confirm that the
-          // prototype method was called successfully.
-          expect(res.email.envelope).to.eql({
-            from: 'noreply@example.com',
-            to: ['bar@bat.com'],
-          });
-        });
-      });
-
-      it('throws when providing an invalid user id', function() {
-        return User.create({email: 'bar@bat.com', password: 'bar'})
-          .then(user => {
-            return User.verify('invalidUserId');
-          })
-          .then(
-            function onSuccess() {
-              throw new Error('User.verify() should have failed');
-            },
-            function onError(err) {
-              err = Object.assign({}, err);
-              expect(err).to.eql({
-                code: 'USER_NOT_FOUND',
-                statusCode: 404,
-              });
-            }
-          );
-      });
-
-      it('forwards the "options" argument', function() {
-        const options = {testFlag: true};
-        const verifyOptions = User.getVerifyOptions();
-
-        // backup original user.verify() method
-        const originalMethod = User.prototype.verify;
-
-        // injecting mockup user.verify() method to ease option forwarding test
-        User.prototype.verify = function(verifyOptions, options, cb) {
-          expect(options).to.eql({testFlag: true});
-          cb();
-        };
-
-        return User.create({email: 'bar@bat.com', password: 'bar'})
-          .then(user => {
-            return User.verify(user.pk, verifyOptions, options);
-          })
-          .finally(()=>{
-            // restoring original user.verify() method;
-            User.prototype.verify = originalMethod;
-          });
       });
     });
 
