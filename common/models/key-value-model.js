@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2014,2016. All Rights Reserved.
+// Copyright IBM Corp. 2016,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -223,10 +223,11 @@ module.exports = function(KeyValueModel) {
 function throwNotAttached(modelName, methodName) {
   throw new Error(g.f(
     'Cannot call %s.%s(). ' +
-      'The %s method has not been setup. '  +
+      'The %s method has not been setup. ' +
       'The {{KeyValueModel}} has not been correctly attached ' +
       'to a {{DataSource}}!',
-    modelName, methodName, methodName));
+    modelName, methodName, methodName
+  ));
 }
 
 function convertNullToNotFoundError(ctx, cb) {

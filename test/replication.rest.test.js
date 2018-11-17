@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2015,2016. All Rights Reserved.
+// Copyright IBM Corp. 2015,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -72,8 +72,8 @@ describe('Replication over REST', function() {
 
       it('allows PETER to WRITE', function(done) {
         createCar()
-        .set('Authorization', peterToken)
-        .expect(200, done);
+          .set('Authorization', peterToken)
+          .expect(200, done);
       });
 
       function listCars() {
@@ -192,7 +192,8 @@ describe('Replication over REST', function() {
         var conflict = new LocalConflict(
           conflictedCarId,
           LocalCar,
-          RemoteCar);
+          RemoteCar
+        );
         conflict.resolveUsingSource(expectHttpError(401, done));
       });
 
@@ -201,7 +202,8 @@ describe('Replication over REST', function() {
         var conflict = new RemoteConflict(
           conflictedCarId,
           RemoteCar,
-          LocalCar);
+          LocalCar
+        );
         conflict.resolveUsingSource(expectHttpError(401, done));
       });
     });
@@ -216,7 +218,8 @@ describe('Replication over REST', function() {
         var conflict = new LocalConflict(
           conflictedCarId,
           LocalCar,
-          RemoteCar);
+          RemoteCar
+        );
         conflict.resolveUsingSource(done);
       });
 
@@ -225,7 +228,8 @@ describe('Replication over REST', function() {
         var conflict = new RemoteConflict(
           conflictedCarId,
           RemoteCar,
-          LocalCar);
+          LocalCar
+        );
         conflict.resolveUsingSource(expectHttpError(401, done));
       });
     });
@@ -403,7 +407,8 @@ describe('Replication over REST', function() {
         LocalUser.updateAll(
           {id: aliceId},
           {fullname: 'Alice Smith'},
-          done);
+          done
+        );
       });
     }
   });
@@ -597,7 +602,7 @@ describe('Replication over REST', function() {
       function(next) {
         ServerCar.create(
           [
-            {id: 'Ford-Mustang',  maker: 'Ford', model: 'Mustang'},
+            {id: 'Ford-Mustang', maker: 'Ford', model: 'Mustang'},
             {id: 'Audi-R8', maker: 'Audi', model: 'R8'},
           ],
           function(err, cars) {
@@ -606,7 +611,8 @@ describe('Replication over REST', function() {
             serverCars = cars.map(carToString);
 
             next();
-          });
+          }
+        );
       },
     ], done);
   }
@@ -625,7 +631,8 @@ describe('Replication over REST', function() {
             clientCars = cars.map(carToString);
 
             next();
-          });
+          }
+        );
       },
     ], done);
   }

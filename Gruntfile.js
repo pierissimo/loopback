@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2014,2016. All Rights Reserved.
+// Copyright IBM Corp. 2014,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -29,6 +29,11 @@ module.exports = function(grunt) {
         files: {
           'dist/loopback.min.js': ['dist/loopback.js'],
         },
+      },
+    },
+    run: {
+      optionalInstall: {
+        exec: 'npm install --no-save --silent karma-phantomjs-launcher phantomjs-prebuilt',
       },
     },
     eslint: {
@@ -211,6 +216,7 @@ module.exports = function(grunt) {
   });
 
   // These plugins provide necessary tasks.
+  grunt.loadNpmTasks('grunt-run');
   grunt.loadNpmTasks('grunt-browserify');
   grunt.loadNpmTasks('grunt-contrib-uglify');
   grunt.loadNpmTasks('grunt-eslint');
@@ -226,8 +232,9 @@ module.exports = function(grunt) {
     });
   });
 
-  grunt.registerTask('skip-karma-on-windows', function() {
-    console.log('*** SKIPPING PHANTOM-JS BASED TESTS ON WINDOWS ***');
+  grunt.registerTask('skip-karma', function() {
+    console.log(`*** SKIPPING PHANTOM-JS BASED TESTS ON ${process.platform}` +
+      ` ${process.arch} ***`);
   });
 
   grunt.registerTask('e2e', ['e2e-server', 'karma:e2e']);
@@ -235,11 +242,14 @@ module.exports = function(grunt) {
   // Default task.
   grunt.registerTask('default', ['browserify']);
 
+  grunt.registerTask('phantomTests', ['run', 'karma:unit-once']);
+
   grunt.registerTask('test', [
     'eslint',
     process.env.JENKINS_HOME ? 'mochaTest:unit-xml' : 'mochaTest:unit',
-    process.env.JENKINS_HOME && /^win/.test(process.platform) ?
-      'skip-karma-on-windows' : 'karma:unit-once',
+    process.env.JENKINS_HOME && (/^win/.test(process.platform) ||
+      /^s390x/.test(process.arch) || /^ppc64/.test(process.arch)) ?
+      'skip-karma' : 'phantomTests',
   ]);
 
   // alias for sl-ci-run and `npm test`

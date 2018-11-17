@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2014,2016. All Rights Reserved.
+// Copyright IBM Corp. 2014,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -157,12 +157,12 @@ describe('Change', function() {
       beforeEach(function(done) {
         var test = this;
         Change.findOrCreateChange(this.modelName, this.modelId)
-        .then(function(result) {
-          test.result = result;
+          .then(function(result) {
+            test.result = result;
 
-          done();
-        })
-        .catch(done);
+            done();
+          })
+          .catch(done);
       });
 
       it('should create an entry', function(done) {
@@ -222,7 +222,8 @@ describe('Change', function() {
           change = ch;
 
           done(err);
-        });
+        }
+      );
     });
 
     it('should create a new change with the correct revision', function(done) {
@@ -352,12 +353,12 @@ describe('Change', function() {
       });
 
       change.currentRevision()
-      .then(function(rev) {
-        assert.equal(rev, test.revisionForModel);
+        .then(function(rev) {
+          assert.equal(rev, test.revisionForModel);
 
-        done();
-      })
-      .catch(done);
+          done();
+        })
+        .catch(done);
     });
   });
 

@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2014,2016. All Rights Reserved.
+// Copyright IBM Corp. 2014,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -30,7 +30,7 @@ function rewriteUserLiteral(req, currentUserLiteral, next) {
     // Replace /me/ with /current-user-id/
     var urlBeforeRewrite = req.url;
     req.url = req.url.replace(literalRegExp,
-        '/' + req.accessToken.userId + '$1');
+      '/' + req.accessToken.userId + '$1');
 
     if (req.url !== urlBeforeRewrite) {
       debug('req.url has been rewritten from %s to %s', urlBeforeRewrite,
@@ -40,7 +40,8 @@ function rewriteUserLiteral(req, currentUserLiteral, next) {
     debug(
       'URL %s matches current-user literal %s,' +
         ' but no (valid) access token was provided.',
-      req.url, currentUserLiteral);
+      req.url, currentUserLiteral
+    );
 
     var e = new Error(g.f('Authorization Required'));
     e.status = e.statusCode = 401;
@@ -88,6 +89,9 @@ function escapeRegExp(str) {
  * @property {Boolean} [overwriteExistingToken] only has effect in combination with `enableDoublecheck`. If truthy, will allow to overwrite an existing accessToken.
  * @property {Function|String} [model] AccessToken model name or class to use.
  * @property {String} [currentUserLiteral] String literal for the current user.
+ * @property {Boolean} [bearerTokenBase64Encoded] Defaults to `true`. For `Bearer` token based `Authorization` headers,
+ * decode the value from `Base64`. If set to `false`, the decoding will be skipped and the token id will be the raw value
+ * parsed from the header.
  * @header loopback.token([options])
  */
 
@@ -104,6 +108,9 @@ function token(options) {
     currentUserLiteral = escapeRegExp(currentUserLiteral);
   }
 
+  if (options.bearerTokenBase64Encoded === undefined) {
+    options.bearerTokenBase64Encoded = true;
+  }
   var enableDoublecheck = !!options.enableDoublecheck;
   var overwriteExistingToken = !!options.overwriteExistingToken;
 

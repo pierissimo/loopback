@@ -1,16 +1,20 @@
-// Copyright IBM Corp. 2013,2016. All Rights Reserved.
+// Copyright IBM Corp. 2016,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
 'use strict';
 var expect = require('./helpers/expect');
-var request = require('supertest');
 var loopback = require('../');
 var ctx = require('../lib/access-context');
+var extend = require('util')._extend;
 var AccessContext = ctx.AccessContext;
 var Principal = ctx.Principal;
 var Promise = require('bluebird');
+const waitForEvent = require('./helpers/wait-for-event');
+const supertest = require('supertest');
+const loggers = require('./helpers/error-loggers');
+const logServerErrorsOtherThan = loggers.logServerErrorsOtherThan;
 
 describe('Multiple users with custom principalType', function() {
   this.timeout(10000);
@@ -22,6 +26,8 @@ describe('Multiple users with custom principalType', function() {
   beforeEach(function setupAppAndModels() {
     // create a local app object that does not share state with other tests
     app = loopback({localRegistry: true, loadBuiltinModels: true});
+    app.set('_verifyAuthModelRelations', false);
+    app.set('remoting', {rest: {handleErrors: false}});
     app.dataSource('db', {connector: 'memory'});
 
     var userModelOptions = {
@@ -53,6 +59,7 @@ describe('Multiple users with custom principalType', function() {
 
     app.enableAuth({dataSource: 'db'});
     app.use(loopback.token({model: AccessToken}));
+    app.use(loopback.rest());
 
     // create one user per user model to use them throughout the tests
     return Promise.all([
@@ -60,15 +67,15 @@ describe('Multiple users with custom principalType', function() {
       AnotherUser.create(commonCredentials),
       Role.create({name: 'userRole'}),
     ])
-    .spread(function(u1, u2, r) {
-      userFromOneModel = u1;
-      userFromAnotherModel = u2;
-      userRole = r;
-      userOneBaseContext = {
-        principalType: OneUser.modelName,
-        principalId: userFromOneModel.id,
-      };
-    });
+      .spread(function(u1, u2, r) {
+        userFromOneModel = u1;
+        userFromAnotherModel = u2;
+        userRole = r;
+        userOneBaseContext = {
+          principalType: OneUser.modelName,
+          principalId: userFromOneModel.id,
+        };
+      });
   });
 
   describe('User.login', function() {
@@ -110,29 +117,29 @@ describe('Multiple users with custom principalType', function() {
 
   describe('User.logout', function() {
     it('logs out a user from user model 1 without logging out user from model 2',
-    function() {
-      var tokenOfOneUser;
-      return Promise.all([
-        OneUser.login(commonCredentials),
-        AnotherUser.login(commonCredentials),
-      ])
-      .spread(function(t1, t2) {
-        tokenOfOneUser = t1;
-        return OneUser.logout(tokenOfOneUser.id);
-      })
-      .then(function() {
-        return AccessToken.find({});
-      })
-      .then(function(allTokens) {
-        var data = allTokens.map(function(token) {
-          return {userId: token.userId, principalType: token.principalType};
-        });
-        expect(data).to.eql([
-          // no token for userFromAnotherModel
-          {userId: userFromAnotherModel.id, principalType: 'AnotherUser'},
-        ]);
+      function() {
+        var tokenOfOneUser;
+        return Promise.all([
+          OneUser.login(commonCredentials),
+          AnotherUser.login(commonCredentials),
+        ])
+          .spread(function(t1, t2) {
+            tokenOfOneUser = t1;
+            return OneUser.logout(tokenOfOneUser.id);
+          })
+          .then(function() {
+            return AccessToken.find({});
+          })
+          .then(function(allTokens) {
+            var data = allTokens.map(function(token) {
+              return {userId: token.userId, principalType: token.principalType};
+            });
+            expect(data).to.eql([
+              // no token for userFromAnotherModel
+              {userId: userFromAnotherModel.id, principalType: 'AnotherUser'},
+            ]);
+          });
       });
-    });
   });
 
   describe('Password Reset', function() {
@@ -143,23 +150,23 @@ describe('Multiple users with custom principalType', function() {
       };
 
       it('creates a temp accessToken to allow a user to change password',
-      function() {
-        return Promise.all([
-          OneUser.resetPassword({email: options.email}),
-          waitForResetRequestAndVerify,
-        ]);
-      });
+        function() {
+          return Promise.all([
+            OneUser.resetPassword({email: options.email}),
+            waitForResetRequestAndVerify,
+          ]);
+        });
 
       function waitForResetRequestAndVerify() {
         return waitForEvent(OneUser, 'resetPasswordRequest')
-        .then(function(info) {
-          assertGoodToken(info.accessToken, userFromOneModel);
-          return info.accessToken.user.getAsync();
-        })
-        .then(function(user) {
-          expect(user).to.have.property('id', userFromOneModel.id);
-          expect(user).to.have.property('email', userFromOneModel.email);
-        });
+          .then(function(info) {
+            assertGoodToken(info.accessToken, userFromOneModel);
+            return info.accessToken.user.getAsync();
+          })
+          .then(function(user) {
+            expect(user).to.have.property('id', userFromOneModel.id);
+            expect(user).to.have.property('email', userFromOneModel.email);
+          });
       }
     });
   });
@@ -206,51 +213,51 @@ describe('Multiple users with custom principalType', function() {
 
     describe('getUser()', function() {
       it('returns user although principals contain non USER principals',
-      function() {
-        return Promise.try(function() {
-          addToAccessContext([
-            {type: Principal.ROLE},
-            {type: Principal.APP},
-            {type: Principal.SCOPE},
-            {type: OneUser.modelName, id: userFromOneModel.id},
-          ]);
-          var user = accessContext.getUser();
-          expect(user).to.eql({
-            id: userFromOneModel.id,
-            principalType: OneUser.modelName,
+        function() {
+          return Promise.try(function() {
+            addToAccessContext([
+              {type: Principal.ROLE},
+              {type: Principal.APP},
+              {type: Principal.SCOPE},
+              {type: OneUser.modelName, id: userFromOneModel.id},
+            ]);
+            var user = accessContext.getUser();
+            expect(user).to.eql({
+              id: userFromOneModel.id,
+              principalType: OneUser.modelName,
+            });
           });
         });
-      });
 
       it('returns user although principals contain invalid principals',
-      function() {
-        return Promise.try(function() {
-          addToAccessContext([
-            {type: 'AccessToken'},
-            {type: 'invalidModelName'},
-            {type: OneUser.modelName, id: userFromOneModel.id},
-          ]);
-          var user = accessContext.getUser();
-          expect(user).to.eql({
-            id: userFromOneModel.id,
-            principalType: OneUser.modelName,
+        function() {
+          return Promise.try(function() {
+            addToAccessContext([
+              {type: 'AccessToken'},
+              {type: 'invalidModelName'},
+              {type: OneUser.modelName, id: userFromOneModel.id},
+            ]);
+            var user = accessContext.getUser();
+            expect(user).to.eql({
+              id: userFromOneModel.id,
+              principalType: OneUser.modelName,
+            });
           });
         });
-      });
 
       it('supports any level of built-in User model inheritance',
-      function() {
-        ThirdUser = createUserModel(app, 'ThirdUser', {base: 'OneUser'});
-        return ThirdUser.create(commonCredentials)
-        .then(function(userFromThirdModel) {
-          accessContext.addPrincipal(ThirdUser.modelName, userFromThirdModel.id);
-          var user = accessContext.getUser();
-          expect(user).to.eql({
-            id: userFromThirdModel.id,
-            principalType: ThirdUser.modelName,
-          });
+        function() {
+          ThirdUser = createUserModel(app, 'ThirdUser', {base: 'OneUser'});
+          return ThirdUser.create(commonCredentials)
+            .then(function(userFromThirdModel) {
+              accessContext.addPrincipal(ThirdUser.modelName, userFromThirdModel.id);
+              var user = accessContext.getUser();
+              expect(user).to.eql({
+                id: userFromThirdModel.id,
+                principalType: ThirdUser.modelName,
+              });
+            });
         });
-      });
     });
 
     // helper
@@ -262,7 +269,7 @@ describe('Multiple users with custom principalType', function() {
     }
   });
 
-  describe('role model', function() {
+  describe('Role model', function() {
     this.timeout(10000);
 
     var RoleMapping, ACL, user;
@@ -278,7 +285,8 @@ describe('Multiple users with custom principalType', function() {
     describe('role.users()', function() {
       it('returns users when using custom user principalType', function() {
         return userRole.principals.create(
-          {principalType: OneUser.modelName, principalId: userFromOneModel.id})
+          {principalType: OneUser.modelName, principalId: userFromOneModel.id}
+        )
           .then(function() {
             return userRole.users({where: {principalType: OneUser.modelName}});
           })
@@ -290,7 +298,8 @@ describe('Multiple users with custom principalType', function() {
 
       it('returns empty array when using invalid principalType', function() {
         return userRole.principals.create(
-          {principalType: 'invalidModelName', principalId: userFromOneModel.id})
+          {principalType: 'invalidModelName', principalId: userFromOneModel.id}
+        )
           .then(function() {
             return userRole.users({where: {principalType: 'invalidModelName'}});
           })
@@ -303,24 +312,22 @@ describe('Multiple users with custom principalType', function() {
     describe('principal.user()', function() {
       it('returns the correct user instance', function() {
         return userRole.principals.create(
-          {principalType: OneUser.modelName, principalId: userFromOneModel.id})
-          .then(function(principal) {
-            return principal.user();
-          })
-          .then(function(user) {
-            expect(user).to.have.property('id', userFromOneModel.id);
-          });
+          {principalType: OneUser.modelName, principalId: userFromOneModel.id}
+        ).then(function(principal) {
+          return principal.user();
+        }).then(function(user) {
+          expect(user).to.have.property('id', userFromOneModel.id);
+        });
       });
 
       it('returns null when created with invalid principalType', function() {
         return userRole.principals.create(
-          {principalType: 'invalidModelName', principalId: userFromOneModel.id})
-          .then(function(principal) {
-            return principal.user();
-          })
-          .then(function(user) {
-            expect(user).to.not.exist();
-          });
+          {principalType: 'invalidModelName', principalId: userFromOneModel.id}
+        ).then(function(principal) {
+          return principal.user();
+        }).then(function(user) {
+          expect(user).to.not.exist();
+        });
       });
     });
 
@@ -339,91 +346,252 @@ describe('Multiple users with custom principalType', function() {
 
       it('supports getRoles()', function() {
         return Role.getRoles(
-         userOneBaseContext)
-          .then(function(roles) {
-            expect(roles).to.eql([
-              Role.AUTHENTICATED,
-              Role.EVERYONE,
-              userRole.id,
-            ]);
-          });
+          userOneBaseContext
+        ).then(function(roles) {
+          expect(roles).to.eql([
+            Role.AUTHENTICATED,
+            Role.EVERYONE,
+            userRole.id,
+          ]);
+        });
       });
     });
 
-    describe('built-in role resolver', function() {
-      it('supports AUTHENTICATED', function() {
+    describe('built-in role resolvers', function() {
+      it('supports $authenticated', function() {
         return Role.isInRole(Role.AUTHENTICATED, userOneBaseContext)
           .then(function(isInRole) {
             expect(isInRole).to.be.true();
           });
       });
 
-      it('supports UNAUTHENTICATED', function() {
+      it('supports $unauthenticated', function() {
         return Role.isInRole(Role.UNAUTHENTICATED, userOneBaseContext)
           .then(function(isInRole) {
             expect(isInRole).to.be.false();
           });
       });
 
-      it('supports OWNER', function() {
-        var Album = app.registry.createModel('Album', {
-          name: String,
-          userId: Number,
-        }, {
-          relations: {
-            user: {
-              type: 'belongsTo',
-              model: 'OneUser',
-              foreignKey: 'userId',
+      describe('$owner', function() {
+        it('supports legacy behavior with relations', function() {
+          var Album = app.registry.createModel('Album', {
+            name: String,
+            userId: Number,
+          }, {
+            relations: {
+              user: {
+                type: 'belongsTo',
+                model: 'OneUser',
+                foreignKey: 'userId',
+              },
             },
-          },
-        });
-        app.model(Album, {dataSource: 'db'});
+          });
+          app.model(Album, {dataSource: 'db'});
 
-        return Album.create({name: 'album', userId: userFromOneModel.id})
-          .then(function(album) {
-            var validContext = {
-              principalType: OneUser.modelName,
-              principalId: userFromOneModel.id,
-              model: Album,
-              id: album.id,
-            };
-            return Role.isInRole(Role.OWNER, validContext);
+          return Album.create({name: 'album', userId: userFromOneModel.id})
+            .then(function(album) {
+              var validContext = {
+                principalType: OneUser.modelName,
+                principalId: userFromOneModel.id,
+                model: Album,
+                id: album.id,
+              };
+              return Role.isInRole(Role.OWNER, validContext);
+            })
+            .then(function(isOwner) {
+              expect(isOwner).to.be.true();
+            });
+        });
+
+        // With multiple users config, we cannot resolve a user based just on
+        // his id, as many users from different models could have the same id.
+        it('legacy behavior resolves false without belongsTo relation', function() {
+          var Album = app.registry.createModel('Album', {
+            name: String,
+            userId: Number,
+            owner: Number,
+          });
+          app.model(Album, {dataSource: 'db'});
+
+          return Album.create({
+            name: 'album',
+            userId: userFromOneModel.id,
+            owner: userFromOneModel.id,
           })
-          .then(function(isOwner) {
-            expect(isOwner).to.be.true();
+            .then(function(album) {
+              var authContext = {
+                principalType: OneUser.modelName,
+                principalId: userFromOneModel.id,
+                model: Album,
+                id: album.id,
+              };
+              return Role.isInRole(Role.OWNER, authContext);
+            })
+            .then(function(isOwner) {
+              expect(isOwner).to.be.false();
+            });
+        });
+
+        it('legacy behavior resolves false if owner has incorrect principalType', function() {
+          var Album = app.registry.createModel('Album', {
+            name: String,
+            userId: Number,
+          }, {
+            relations: {
+              user: {
+                type: 'belongsTo',
+                model: 'OneUser',
+                foreignKey: 'userId',
+              },
+            },
+          });
+          app.model(Album, {dataSource: 'db'});
+
+          return Album.create({name: 'album', userId: userFromOneModel.id})
+            .then(function(album) {
+              var invalidPrincipalTypes = [
+                'invalidContextName',
+                'USER',
+                AnotherUser.modelName,
+              ];
+              var invalidContexts = invalidPrincipalTypes.map(principalType => {
+                return {
+                  principalType,
+                  principalId: userFromOneModel.id,
+                  model: Album,
+                  id: album.id,
+                };
+              });
+              return Promise.map(invalidContexts, context => {
+                return Role.isInRole(Role.OWNER, context)
+                  .then(isOwner => {
+                    return {
+                      principalType: context.principalType,
+                      isOwner,
+                    };
+                  });
+              });
+            })
+            .then(result => {
+              expect(result).to.eql([
+                {principalType: 'invalidContextName', isOwner: false},
+                {principalType: 'USER', isOwner: false},
+                {principalType: AnotherUser.modelName, isOwner: false},
+              ]);
+            });
+        });
+
+        it.skip('resolves the owner using the corrent belongsTo relation',
+          function() {
+          // passing {ownerRelations: true} will enable the new $owner role resolver
+          // with any belongsTo relation allowing to resolve truthy
+            var Message = createModelWithOptions(
+              'ModelWithAllRelations',
+              {ownerRelations: true}
+            );
+
+            var messages = [
+              {content: 'firstMessage', customerId: userFromOneModel.id},
+              {
+                content: 'secondMessage',
+                customerId: userFromOneModel.id,
+                shopKeeperId: userFromAnotherModel.id,
+              },
+
+              // this is the incriminated message where two foreignKeys have the
+              // same id but points towards two different user models. Although
+              // customers should come from userFromOneModel and shopKeeperIds should
+              // come from userFromAnotherModel. The inverted situation still resolves
+              // isOwner true for both the customer and the shopKeeper
+              {
+                content: 'thirdMessage',
+                customerId: userFromAnotherModel.id,
+                shopKeeperId: userFromOneModel.id,
+              },
+
+              {content: 'fourthMessage', customerId: userFromAnotherModel.id},
+              {content: 'fifthMessage'},
+            ];
+            return Promise.map(messages, msg => {
+              return Message.create(msg);
+            })
+              .then(messages => {
+                return Promise.all([
+                  isOwnerForMessage(userFromOneModel, messages[0]),
+                  isOwnerForMessage(userFromAnotherModel, messages[0]),
+                  isOwnerForMessage(userFromOneModel, messages[1]),
+                  isOwnerForMessage(userFromAnotherModel, messages[1]),
+
+                  isOwnerForMessage(userFromOneModel, messages[2]),
+                  isOwnerForMessage(userFromAnotherModel, messages[2]),
+
+                  isOwnerForMessage(userFromAnotherModel, messages[3]),
+                  isOwnerForMessage(userFromOneModel, messages[4]),
+                ]);
+              })
+              .then(result => {
+                expect(result).to.eql([
+                  {userFrom: 'OneUser', msg: 'firstMessage', isOwner: true},
+                  {userFrom: 'AnotherUser', msg: 'firstMessage', isOwner: false},
+                  {userFrom: 'OneUser', msg: 'secondMessage', isOwner: true},
+                  {userFrom: 'AnotherUser', msg: 'secondMessage', isOwner: true},
+
+                  // these 2 tests fail because we cannot resolve ownership with
+                  // multiple owners on a single model instance with a classic
+                  // belongsTo relation, we need to use belongsTo with polymorphic
+                  // discriminator to distinguish between the 2 models
+                  {userFrom: 'OneUser', msg: 'thirdMessage', isOwner: false},
+                  {userFrom: 'AnotherUser', msg: 'thirdMessage', isOwner: false},
+
+                  {userFrom: 'AnotherUser', msg: 'fourthMessage', isOwner: false},
+                  {userFrom: 'OneUser', msg: 'fifthMessage', isOwner: false},
+                ]);
+              });
           });
       });
 
-      it('expects OWNER to resolve false if owner has incorrect principalType', function() {
-        var Album = app.registry.createModel('Album', {
-          name: String,
-          userId: Number,
-        }, {
+      // helpers
+      function isOwnerForMessage(user, msg) {
+        var accessContext = {
+          principalType: user.constructor.modelName,
+          principalId: user.id,
+          model: msg.constructor,
+          id: msg.id,
+        };
+        return Role.isInRole(Role.OWNER, accessContext)
+          .then(isOwner => {
+            return {
+              userFrom: user.constructor.modelName,
+              msg: msg.content,
+              isOwner,
+            };
+          });
+      }
+
+      function createModelWithOptions(name, options) {
+        var baseOptions = {
           relations: {
-            user: {
+            sender: {
               type: 'belongsTo',
               model: 'OneUser',
-              foreignKey: 'userId',
+              foreignKey: 'customerId',
+            },
+            receiver: {
+              type: 'belongsTo',
+              model: 'AnotherUser',
+              foreignKey: 'shopKeeperId',
             },
           },
-        });
-        app.model(Album, {dataSource: 'db'});
-
-        return Album.create({name: 'album', userId: userFromOneModel.id})
-          .then(function(album) {
-            var invalidContext = {
-              principalType: AnotherUser.modelName,
-              principalId: userFromOneModel.id,
-              model: Album,
-              id: album.id,
-            };
-            return Role.isInRole(Role.OWNER, invalidContext);
-          })
-          .then(function(isOwner) {
-            expect(isOwner).to.be.false();
-          });
-      });
+        };
+        options = extend(baseOptions, options);
+        var Model = app.registry.createModel(
+          name,
+          {content: String, senderType: String},
+          options
+        );
+        app.model(Model, {dataSource: 'db'});
+        return Model;
+      }
     });
 
     describe('isMappedToRole()', function() {
@@ -439,27 +607,163 @@ describe('Multiple users with custom principalType', function() {
       });
 
       it('throws error with code \'INVALID_PRINCIPAL_TYPE\' when principalType is incorrect',
-      function() {
-        return ACL.resolvePrincipal('incorrectPrincipalType', userFromOneModel.id)
-          .then(
-            function onSuccess() {
-              throw new Error('ACL.resolvePrincipal() should have failed');
-            },
-            function onError(err) {
-              expect(err).to.have.property('statusCode', 400);
-              expect(err).to.have.property('code', 'INVALID_PRINCIPAL_TYPE');
-            }
-          );
-      });
+        function() {
+          return ACL.resolvePrincipal('incorrectPrincipalType', userFromOneModel.id)
+            .then(
+              function onSuccess() {
+                throw new Error('ACL.resolvePrincipal() should have failed');
+              },
+              function onError(err) {
+                expect(err).to.have.property('statusCode', 400);
+                expect(err).to.have.property('code', 'INVALID_PRINCIPAL_TYPE');
+              }
+            );
+        });
 
       it('reports isMappedToRole by user.username using custom user principalType',
-      function() {
-        return ACL.isMappedToRole(OneUser.modelName, userFromOneModel.username, 'userRole')
-          .then(function(isMappedToRole) {
-            expect(isMappedToRole).to.be.true();
-          });
-      });
+        function() {
+          return ACL.isMappedToRole(OneUser.modelName, userFromOneModel.username, 'userRole')
+            .then(function(isMappedToRole) {
+              expect(isMappedToRole).to.be.true();
+            });
+        });
     });
+  });
+
+  describe('setPassword', () => {
+    let resetToken;
+    beforeEach(givenResetPasswordTokenForOneUser);
+
+    it('sets password when the access token belongs to the user', () => {
+      return supertest(app)
+        .post('/OneUsers/reset-password')
+        .set('Authorization', resetToken.id)
+        .send({newPassword: 'new-pass'})
+        .expect(204)
+        .then(() => {
+          return supertest(app)
+            .post('/OneUsers/login')
+            .send({email: commonCredentials.email, password: 'new-pass'})
+            .expect(200);
+        });
+    });
+
+    it('fails when the access token belongs to a different user mode', () => {
+      logServerErrorsOtherThan(403, app);
+      return supertest(app)
+        .post('/AnotherUsers/reset-password')
+        .set('Authorization', resetToken.id)
+        .send({newPassword: 'new-pass'})
+        .expect(403)
+        .then(() => {
+          return supertest(app)
+            .post('/AnotherUsers/login')
+            .send(commonCredentials)
+            .expect(200);
+        });
+    });
+
+    function givenResetPasswordTokenForOneUser() {
+      return Promise.all([
+        OneUser.resetPassword({email: commonCredentials.email}),
+        waitForEvent(OneUser, 'resetPasswordRequest'),
+      ])
+        .spread((reset, info) => resetToken = info.accessToken);
+    }
+  });
+
+  describe('changePassword', () => {
+    let token;
+    beforeEach(givenTokenForOneUser);
+
+    it('changes password when the access token belongs to the user', () => {
+      return supertest(app)
+        .post('/OneUsers/change-password')
+        .set('Authorization', token.id)
+        .send({
+          oldPassword: commonCredentials.password,
+          newPassword: 'new-pass',
+        })
+        .expect(204)
+        .then(() => {
+          return supertest(app)
+            .post('/OneUsers/login')
+            .send({email: commonCredentials.email, password: 'new-pass'})
+            .expect(200);
+        });
+    });
+
+    it('fails when the access token belongs to a different user mode', () => {
+      logServerErrorsOtherThan(403, app);
+      return supertest(app)
+        .post('/AnotherUsers/change-password')
+        .set('Authorization', token.id)
+        .send({
+          oldPassword: commonCredentials.password,
+          newPassword: 'new-pass',
+        })
+        .expect(403)
+        .then(() => {
+          return supertest(app)
+            .post('/AnotherUsers/login')
+            .send(commonCredentials)
+            .expect(200);
+        });
+    });
+
+    function givenTokenForOneUser() {
+      return OneUser.login(commonCredentials).then(t => token = t);
+    }
+  });
+
+  describe('authorization', () => {
+    beforeEach(givenProductModelAllowingOnlyUserRoleAccess);
+
+    it('allows users belonging to authorized role', () => {
+      logServerErrorsOtherThan(200, app);
+      return userFromOneModel.createAccessToken()
+        .then(token => {
+          return supertest(app)
+            .get('/Products')
+            .set('Authorization', token.id)
+            .expect(200, []);
+        });
+    });
+
+    it('rejects other users', () => {
+      logServerErrorsOtherThan(401, app);
+      return userFromAnotherModel.createAccessToken()
+        .then(token => {
+          return supertest(app)
+            .get('/Products')
+            .set('Authorization', token.id)
+            .expect(401);
+        });
+    });
+
+    function givenProductModelAllowingOnlyUserRoleAccess() {
+      const Product = app.registry.createModel({
+        name: 'Product',
+        acls: [
+          {
+            'principalType': 'ROLE',
+            'principalId': '$everyone',
+            'permission': 'DENY',
+          },
+          {
+            'principalType': 'ROLE',
+            'principalId': userRole.name,
+            'permission': 'ALLOW',
+          },
+        ],
+      });
+      app.model(Product, {dataSource: 'db'});
+
+      return userRole.principals.create({
+        principalType: OneUser.modelName,
+        principalId: userFromOneModel.id,
+      });
+    }
   });
 
   // helpers
@@ -474,9 +778,9 @@ describe('Multiple users with custom principalType', function() {
     return new Promise(function(resolve, reject) {
       emitter.once(name, resolve);
     });
-  };
+  }
 
   function getIds(array) {
     return array.map(function(it) { return it.id; });
-  };
+  }
 });

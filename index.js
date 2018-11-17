@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013,2016. All Rights Reserved.
+// Copyright IBM Corp. 2013,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -25,4 +25,5 @@ loopback.Remote = require('loopback-connector-remote');
  */
 
 loopback.GeoPoint = require('loopback-datasource-juggler/lib/geo').GeoPoint;
+loopback.DateString = require('loopback-datasource-juggler/lib/date-string');
 loopback.ValidationError = loopback.Model.ValidationError;

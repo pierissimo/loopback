@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013,2016. All Rights Reserved.
+// Copyright IBM Corp. 2013,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -43,10 +43,10 @@ Application.create(data, function(err, data) {
 });
 
 Application.register('rfeng', 'MyApp', {description: g.f('My first mobile application')},
-function(err, result) {
-  console.log(result.toObject());
-
-  result.resetKeys(function(err, result) {
+  function(err, result) {
     console.log(result.toObject());
+
+    result.resetKeys(function(err, result) {
+      console.log(result.toObject());
+    });
   });
-});

@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013,2016. All Rights Reserved.
+// Copyright IBM Corp. 2013,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -75,10 +75,12 @@ describe('access control - integration', function() {
     lt.it.shouldBeDeniedWhenCalledByUser(CURRENT_USER, 'GET', urlForUser);
 
     lt.it.shouldBeAllowedWhenCalledAnonymously(
-      'POST', '/api/users', newUserData());
+      'POST', '/api/users', newUserData()
+    );
 
     lt.it.shouldBeAllowedWhenCalledByUser(
-      CURRENT_USER, 'POST', '/api/users', newUserData());
+      CURRENT_USER, 'POST', '/api/users', newUserData()
+    );
 
     lt.it.shouldBeAllowedWhenCalledByUser(CURRENT_USER, 'POST', '/api/users/logout');
 

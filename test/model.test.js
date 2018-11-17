@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013,2016. All Rights Reserved.
+// Copyright IBM Corp. 2013,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -924,16 +924,50 @@ describe.onServer('Remote Methods', function() {
   });
 
   describe('Model.createOptionsFromRemotingContext', function() {
-    var app, TestModel, accessToken, userId, actualOptions;
+    var app, TestModel, accessToken, actualOptions;
 
     before(setupAppAndRequest);
     before(createUserAndAccessToken);
+
+    beforeEach(function() {
+      TestModel.definition.settings = {};
+    });
 
     it('sets empty options.accessToken for anonymous requests', function(done) {
       request(app).get('/TestModels/saveOptions')
         .expect(204, function(err) {
           if (err) return done(err);
           expect(actualOptions).to.include({accessToken: null});
+          done();
+        });
+    });
+
+    it('sets options for juggler', function(done) {
+      request(app).get('/TestModels/saveOptions')
+        .expect(204, function(err) {
+          if (err) return done(err);
+          expect(actualOptions).to.include({
+            prohibitHiddenPropertiesInQuery: true,
+            maxDepthOfQuery: 12,
+            maxDepthOfData: 32,
+          });
+          done();
+        });
+    });
+
+    it('honors model settings to create options for juggler', function(done) {
+      TestModel.definition.settings = {
+        prohibitHiddenPropertiesInQuery: false,
+        maxDepthOfData: 64,
+      };
+      request(app).get('/TestModels/saveOptions')
+        .expect(204, function(err) {
+          if (err) return done(err);
+          expect(actualOptions).to.include({
+            prohibitHiddenPropertiesInQuery: false,
+            maxDepthOfQuery: 12,
+            maxDepthOfData: 64,
+          });
           done();
         });
     });
@@ -962,6 +996,12 @@ describe.onServer('Remote Methods', function() {
           expect(actualOptions).to.have.property('hooked', true);
           done();
         });
+    });
+
+    it('sets empty options.accessToken for requests coming from websocket/primus adapters', function() {
+      const primusContext = {};
+      const opts = TestModel.createOptionsFromRemotingContext(primusContext);
+      expect(opts).to.have.property('accessToken', null);
     });
 
     it('allows apps to add options before remoting hooks', function(done) {
@@ -1022,8 +1062,21 @@ describe.onServer('Remote Methods', function() {
           return User.login(CREDENTIALS);
         }).then(function(token) {
           accessToken = token;
-          userId = token.userId;
         });
     }
+  });
+
+  describe('Create Model with remote methods from JSON description', function() {
+    it('does not add isStatic properties to the method settings', function() {
+      const app = loopback();
+      const Foo = app.registry.createModel({
+        name: 'Foo',
+        methods: {
+          staticMethod: {},
+        },
+      });
+      app.model(Foo);
+      expect(app.models.Foo.settings.methods.staticMethod).to.eql({});
+    });
   });
 });

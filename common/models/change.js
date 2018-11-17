@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2014,2016. All Rights Reserved.
+// Copyright IBM Corp. 2014,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -502,7 +502,8 @@ module.exports = function(Change) {
       async.each(
         changes,
         function(c, next) { c.rectify(next); },
-        cb);
+        cb
+      );
     });
   };
 
@@ -691,8 +692,10 @@ module.exports = function(Change) {
         conflict.SourceModel.updateLastChange(
           conflict.modelId,
           {prev: targetChange.rev},
-          cb);
-      });
+          cb
+        );
+      }
+    );
   };
 
   /**
@@ -724,7 +727,8 @@ module.exports = function(Change) {
       }
       var inst = new conflict.SourceModel(
         target.toObject(),
-        {persisted: true});
+        {persisted: true}
+      );
       inst.save(done);
     });
 

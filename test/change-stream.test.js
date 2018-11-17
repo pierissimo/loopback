@@ -1,10 +1,11 @@
-// Copyright IBM Corp. 2015,2016. All Rights Reserved.
+// Copyright IBM Corp. 2015,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
 'use strict';
 var expect = require('./helpers/expect');
+var sinon = require('sinon');
 var loopback = require('../');
 
 describe('PersistedModel.createChangeStream()', function() {
@@ -20,6 +21,8 @@ describe('PersistedModel.createChangeStream()', function() {
       });
     });
 
+    afterEach(verifyObserversRemoval);
+
     it('should detect create', function(done) {
       var Score = this.Score;
 
@@ -27,7 +30,6 @@ describe('PersistedModel.createChangeStream()', function() {
         changes.on('data', function(change) {
           expect(change.type).to.equal('create');
           changes.destroy();
-
           done();
         });
 
@@ -67,6 +69,64 @@ describe('PersistedModel.createChangeStream()', function() {
         });
       });
     });
+
+    it('should apply "where" and "fields" to create events', function() {
+      const Score = this.Score;
+      const data = [
+        {team: 'baz', player: 'baz', value: 1},
+        {team: 'bar', player: 'baz', value: 2},
+        {team: 'foo', player: 'bar', value: 3},
+      ];
+      const options = {where: {player: 'bar'}, fields: ['team', 'value']};
+      const changes = [];
+      let changeStream;
+
+      return Score.createChangeStream(options)
+        .then(stream => {
+          changeStream = stream;
+          changeStream.on('data', function(change) {
+            changes.push(change);
+          });
+
+          return Score.create(data);
+        })
+        .then(scores => {
+          changeStream.destroy();
+
+          expect(changes).to.have.length(1);
+          expect(changes[0]).to.have.property('type', 'create');
+          expect(changes[0].data).to.eql({
+            'team': 'foo',
+            value: 3,
+          });
+        });
+    });
+
+    it('should not emit changes after destroy', function(done) {
+      var Score = this.Score;
+
+      var spy = sinon.spy();
+
+      Score.createChangeStream(function(err, changes) {
+        changes.on('data', function() {
+          spy();
+          changes.destroy();
+        });
+
+        Score.create({team: 'foo'})
+          .then(() => Score.deleteAll())
+          .then(() => {
+            expect(spy.calledOnce);
+            done();
+          });
+      });
+    });
+
+    function verifyObserversRemoval() {
+      var Score = this.Score;
+      expect(Score._observers['after save']).to.be.empty();
+      expect(Score._observers['after delete']).to.be.empty();
+    }
   });
 
   // TODO(ritch) implement multi-server support

@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013,2016. All Rights Reserved.
+// Copyright IBM Corp. 2013,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -63,17 +63,16 @@ describe('relations - integration', function() {
 
           test.team = team;
           app.models.Reader.create({name: 'Reader 1'},
-          function(err, reader) {
-            if (err) return done(err);
+            function(err, reader) {
+              if (err) return done(err);
 
-            test.reader = reader;
-            reader.pictures.create({name: 'Picture 1'});
-            reader.pictures.create({name: 'Picture 2'});
-            reader.team(test.team);
-            reader.save(done);
-          });
-        }
-      );
+              test.reader = reader;
+              reader.pictures.create({name: 'Picture 1'});
+              reader.pictures.create({name: 'Picture 2'});
+              reader.team(test.team);
+              reader.save(done);
+            });
+        });
     });
 
     after(function(done) {
@@ -157,9 +156,9 @@ describe('relations - integration', function() {
         beforeEach(function() {
           debug('GET /api/stores/:id/widgets response: %s' +
               '\nheaders: %j\nbody string: %s',
-            this.res.statusCode,
-            this.res.headers,
-            this.res.text);
+          this.res.statusCode,
+          this.res.headers,
+          this.res.text);
           this.widgets = this.res.body;
           this.widget = this.res.body && this.res.body[0];
         });
@@ -661,8 +660,8 @@ describe('relations - integration', function() {
       this.app.remotes()._typeRegistry._options.warnWhenOverridingType = false;
 
       var product = app.registry.createModel(
-         'product',
-         {id: 'string', name: 'string'}
+        'product',
+        {id: 'string', name: 'string'}
       );
       var category = app.registry.createModel(
         'category',
@@ -784,7 +783,8 @@ describe('relations - integration', function() {
 
   describe('embedsOne', function() {
     before(function defineGroupAndPosterModels() {
-      var group = app.registry.createModel('group',
+      var group = app.registry.createModel(
+        'group',
         {name: 'string'},
         {plural: 'groups'}
       );
@@ -996,7 +996,7 @@ describe('relations - integration', function() {
         });
     });
 
-    it('returns the embedded models', function(done) {
+    it('includes the created embedded model', function(done) {
       var url = '/api/todo-lists/' + this.todoList.id + '/items';
 
       this.get(url)
@@ -1096,7 +1096,7 @@ describe('relations - integration', function() {
 
       var ingredient = app.registry.createModel(
         'ingredient',
-       {name: 'string'}
+        {name: 'string'}
       );
       app.model(ingredient, {dataSource: 'db'});
 
@@ -1311,7 +1311,7 @@ describe('relations - integration', function() {
         });
     });
 
-    it('returns the referenced models - verify', function(done) {
+    it('returns the referenced models without the deleted one', function(done) {
       var url = '/api/recipes/' + this.recipe.id + '/ingredients';
       var test = this;
 
@@ -1370,7 +1370,7 @@ describe('relations - integration', function() {
         });
     });
 
-    it('returns the referenced models - verify', function(done) {
+    it('returns the referenced models without the unlinked one', function(done) {
       var url = '/api/recipes/' + this.recipe.id + '/ingredients';
       var test = this;
 
@@ -1439,6 +1439,8 @@ describe('relations - integration', function() {
   });
 
   describe('nested relations', function() {
+    let accessOptions;
+
     before(function defineModels() {
       var Book = app.registry.createModel(
         'Book',
@@ -1475,9 +1477,10 @@ describe('relations - integration', function() {
       );
       app.model(Chapter, {dataSource: 'db'});
 
-      Book.hasMany(Page);
+      Book.hasMany(Page, {options: {nestRemoting: true}});
       Book.hasMany(Chapter);
       Page.hasMany(Note);
+      Page.belongsTo(Book, {options: {nestRemoting: true}});
       Chapter.hasMany(Note);
       Image.belongsTo(Book);
 
@@ -1486,9 +1489,11 @@ describe('relations - integration', function() {
         throw new Error('This should not crash the app');
       };
 
-      Page.remoteMethod('__throw__errors', {isStatic: false, http: {path: '/throws', verb: 'get'}});
+      Page.remoteMethod('__throw__errors', {isStatic: false, http: {path: '/throws', verb: 'get'},
+        accepts: [{arg: 'options', type: 'object', http: 'optionsFromRequest'}]});
 
-      Book.nestRemoting('pages');
+      // Now `pages` has nestRemoting set to true and no need to call nestRemoting()
+      // Book.nestRemoting('pages');
       Book.nestRemoting('chapters');
       Image.nestRemoting('book');
 
@@ -1506,6 +1511,15 @@ describe('relations - integration', function() {
 
         next();
       });
+
+      Page.observe('access', function(ctx, next) {
+        accessOptions = ctx.options;
+        next();
+      });
+    });
+
+    beforeEach(function resetAccessOptions() {
+      accessOptions = 'access hook not triggered';
     });
 
     before(function createBook(done) {
@@ -1516,17 +1530,17 @@ describe('relations - integration', function() {
 
           test.book = book;
           book.pages.create({name: 'Page 1'},
-          function(err, page) {
-            if (err) return done(err);
+            function(err, page) {
+              if (err) return done(err);
 
-            test.page = page;
-            page.notes.create({text: 'Page Note 1'},
-            function(err, note) {
-              test.note = note;
+              test.page = page;
+              page.notes.create({text: 'Page Note 1'},
+                function(err, note) {
+                  test.note = note;
 
-              done();
+                  done();
+                });
             });
-          });
         });
     });
 
@@ -1618,6 +1632,7 @@ describe('relations - integration', function() {
     it('enables nested relationship routes - belongsTo findById', function(done) {
       var test = this;
       this.get('/api/images/' + test.image.id + '/book/pages/' + test.page.id)
+        .expect(200)
         .end(function(err, res) {
           if (err) return done(err);
 
@@ -1654,6 +1669,14 @@ describe('relations - integration', function() {
           expect(res.body.text).to.equal('Page Note 1');
 
           done();
+        });
+    });
+
+    it('passes options to nested relationship routes', function() {
+      return this.get(`/api/books/${this.book.id}/pages/${this.page.id}/notes/${this.note.id}`)
+        .expect(200)
+        .then(res => {
+          expect(accessOptions).to.have.property('accessToken');
         });
     });
 

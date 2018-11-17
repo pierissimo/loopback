@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2014,2016. All Rights Reserved.
+// Copyright IBM Corp. 2014,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -78,13 +78,13 @@ describe('Checkpoint', function() {
     });
 
     it('Checkpoint.current() for non existing checkpoint should initialize checkpoint',
-    function(done) {
-      Checkpoint.current(function(err, seq) {
-        expect(seq).to.equal(1);
+      function(done) {
+        Checkpoint.current(function(err, seq) {
+          expect(seq).to.equal(1);
 
-        done(err);
+          done(err);
+        });
       });
-    });
 
     it('bumpLastSeq() works when singleton instance does not exists yet', function(done) {
       Checkpoint.bumpLastSeq(function(err, cp) {

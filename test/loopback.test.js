@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013,2016. All Rights Reserved.
+// Copyright IBM Corp. 2013,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -46,6 +46,7 @@ describe('loopback', function() {
         'Checkpoint',
         'Connector',
         'DataSource',
+        'DateString',
         'Email',
         'GeoPoint',
         'KeyValueModel',
@@ -99,7 +100,7 @@ describe('loopback', function() {
 
       var actual = Object.getOwnPropertyNames(loopback);
       actual.sort();
-      expect(actual).to.eql(EXPECTED);
+      expect(actual).to.include.members(EXPECTED);
     });
   });
 
@@ -737,6 +738,172 @@ describe('loopback', function() {
       return Model.sharedClass.methods().map(function(m) {
         return m.stringName.replace(/^[^.]+\./, ''); // drop the class name
       });
+    }
+  });
+
+  describe('Hiding shared methods', function() {
+    var app;
+
+    beforeEach(setupLoopback);
+
+    it('hides remote methods using fixed method names', function() {
+      var TestModel = app.registry.createModel(uniqueModelName);
+      app.model(TestModel, {
+        dataSource: null,
+        methods: {
+          staticMethod: {
+            isStatic: true,
+            http: {path: '/static'},
+          },
+        },
+        options: {
+          remoting: {
+            sharedMethods: {
+              staticMethod: false,
+            },
+          },
+        },
+      });
+
+      var publicMethods = getSharedMethods(TestModel);
+
+      expect(publicMethods).not.to.include.members([
+        'staticMethod',
+      ]);
+    });
+
+    it('hides remote methods using a glob pattern', function() {
+      var TestModel = app.registry.createModel(uniqueModelName);
+      app.model(TestModel, {
+        dataSource: null,
+        methods: {
+          staticMethod: {
+            isStatic: true,
+            http: {path: '/static'},
+          },
+          instanceMethod: {
+            isStatic: false,
+            http: {path: '/instance'},
+          },
+        },
+        options: {
+          remoting: {
+            sharedMethods: {
+              'prototype.*': false,
+            },
+          },
+        },
+      });
+
+      var publicMethods = getSharedMethods(TestModel);
+
+      expect(publicMethods).to.include.members([
+        'staticMethod',
+      ]);
+      expect(publicMethods).not.to.include.members([
+        'instanceMethod',
+      ]);
+    });
+
+    it('hides all remote methods using *', function() {
+      var TestModel = app.registry.createModel(uniqueModelName);
+      app.model(TestModel, {
+        dataSource: null,
+        methods: {
+          staticMethod: {
+            isStatic: true,
+            http: {path: '/static'},
+          },
+          instanceMethod: {
+            isStatic: false,
+            http: {path: '/instance'},
+          },
+        },
+        options: {
+          remoting: {
+            sharedMethods: {
+              '*': false,
+            },
+          },
+        },
+      });
+
+      var publicMethods = getSharedMethods(TestModel);
+
+      expect(publicMethods).to.be.empty();
+    });
+
+    it('hides methods for related models using globs (model configured first)', function() {
+      const TestModel = app.registry.createModel('TestModel');
+      const RelatedModel = app.registry.createModel('RelatedModel');
+      app.dataSource('test', {connector: 'memory'});
+      app.model(TestModel, {
+        dataSource: 'test',
+        relations: {
+          related: {
+            type: 'hasOne',
+            model: RelatedModel,
+          },
+        },
+        options: {
+          remoting: {
+            sharedMethods: {
+              '*__related': false,
+            },
+          },
+        },
+      });
+      app.model(RelatedModel, {dataSource: 'test'});
+
+      const publicMethods = getSharedMethods(TestModel);
+
+      expect(publicMethods).to.not.include.members([
+        'prototype.__create__related',
+      ]);
+    });
+
+    it('hides methods for related models using globs (related model configured first)', function() {
+      const TestModel = app.registry.createModel('TestModel');
+      const RelatedModel = app.registry.createModel('RelatedModel');
+      app.dataSource('test', {connector: 'memory'});
+      app.model(RelatedModel, {dataSource: 'test'});
+      app.model(TestModel, {
+        dataSource: 'test',
+        relations: {
+          related: {
+            type: 'hasOne',
+            model: RelatedModel,
+          },
+        },
+        options: {
+          remoting: {
+            sharedMethods: {
+              '*__related': false,
+            },
+          },
+        },
+      });
+
+      const publicMethods = getSharedMethods(TestModel);
+
+      expect(publicMethods).to.not.include.members([
+        'prototype.__create__related',
+      ]);
+    });
+
+    function setupLoopback() {
+      app = loopback({localRegistry: true});
+    }
+
+    function getSharedMethods(Model) {
+      return Model.sharedClass
+        .methods()
+        .filter(function(m) {
+          return m.shared === true;
+        })
+        .map(function(m) {
+          return m.stringName.replace(/^[^.]+\./, ''); // drop the class name
+        });
     }
   });
 });

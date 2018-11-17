@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2014,2016. All Rights Reserved.
+// Copyright IBM Corp. 2014,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -16,6 +16,8 @@ var path = require('path');
 var qs = require('querystring');
 var SALT_WORK_FACTOR = 10;
 var crypto = require('crypto');
+// bcrypt's max length is 72 bytes;
+// See https://github.com/kelektiv/node.bcrypt.js/blob/45f498ef6dc6e8234e58e07834ce06a50ff16352/src/node_blf.h#L59
 var MAX_PASSWORD_LENGTH = 72;
 var bcrypt;
 try {
@@ -183,9 +185,15 @@ module.exports = function(User) {
    *
    * ```js
    *    User.login({username: 'foo', password: 'bar'}, function (err, token) {
-  *      console.log(token.id);
-  *    });
+   *      console.log(token.id);
+   *    });
    * ```
+   *
+   * If the `emailVerificationRequired` flag is set for the inherited user model
+   * and the email has not yet been verified then the method will return a 401
+   * error that will contain the user's id. This id can be used to call the
+   * `api/verify` remote method to generate a new email verification token and
+   * send back the related email to the user.
    *
    * @param {Object} credentials username/password or email/password
    * @param {String[]|String} [include] Optionally set it to "user" to include
@@ -273,6 +281,9 @@ module.exports = function(User) {
               err = new Error(g.f('login failed as the email has not been verified'));
               err.statusCode = 401;
               err.code = 'LOGIN_FAILED_EMAIL_NOT_VERIFIED';
+              err.details = {
+                userId: user.id,
+              };
               fn(err);
             } else {
               if (user.createAccessToken.length === 2) {
@@ -315,7 +326,7 @@ module.exports = function(User) {
     var err;
     if (!tokenId) {
       err = new Error(g.f('{{accessToken}} is required to logout'));
-      err.status = 401;
+      err.statusCode = 401;
       process.nextTick(fn, err);
       return fn.promise;
     }
@@ -325,7 +336,7 @@ module.exports = function(User) {
         fn(err);
       } else if ('count' in info && info.count === 0) {
         err = new Error(g.f('Could not find {{accessToken}}'));
-        err.status = 401;
+        err.statusCode = 401;
         fn(err);
       } else {
         fn();
@@ -335,6 +346,9 @@ module.exports = function(User) {
   };
 
   User.observe('before delete', function(ctx, next) {
+    // Do nothing when the access control was disabled for this user model.
+    if (!ctx.Model.relations.accessTokens) return next();
+
     var AccessToken = ctx.Model.relations.accessTokens.modelTo;
     var pkName = ctx.Model.definition.idName() || 'id';
     ctx.Model.find({where: ctx.where, fields: [pkName]}, function(err, list) {
@@ -527,42 +541,152 @@ module.exports = function(User) {
   };
 
   /**
-   * Verify a user's identity by sending them a confirmation email.
+   * Returns default verification options to use when calling User.prototype.verify()
+   * from remote method /user/:id/verify.
+   *
+   * NOTE: the User.getVerifyOptions() method can also be used to ease the
+   * building of identity verification options.
    *
    * ```js
-   *    var verifyOptions = {
-   *      type: 'email',
-   *      from: noreply@example.com,
-   *      template: 'verify.ejs',
-   *      redirect: '/',
-   *      tokenGenerator: function (user, cb) { cb("random-token"); }
-   *    };
+   * var verifyOptions = MyUser.getVerifyOptions();
+   * user.verify(verifyOptions);
+   * ```
    *
-   *    user.verify(verifyOptions, options, next);
+   * This is the full list of possible params, with example values
+   *
+   * ```js
+   * {
+   *   type: 'email',
+   *   mailer: {
+   *     send(verifyOptions, options, cb) {
+   *       // send the email
+   *       cb(err, result);
+   *     }
+   *   },
+   *   to: 'test@email.com',
+   *   from: 'noreply@email.com'
+   *   subject: 'verification email subject',
+   *   text: 'Please verify your email by opening this link in a web browser',
+   *   headers: {'Mime-Version': '1.0'},
+   *   template: 'path/to/template.ejs',
+   *   templateFn: function(verifyOptions, options, cb) {
+   *     cb(null, 'some body template');
+   *   }
+   *   redirect: '/',
+   *   verifyHref: 'http://localhost:3000/api/user/confirm',
+   *   host: 'localhost'
+   *   protocol: 'http'
+   *   port: 3000,
+   *   restApiRoot= '/api',
+   *   generateVerificationToken: function (user, options, cb) {
+   *     cb(null, 'random-token');
+   *   }
+   * }
+   * ```
+   *
+   * NOTE: param `to` internally defaults to user's email but can be overriden for
+   * test purposes or advanced customization.
+   *
+   * Static default params can be modified in your custom user model json definition
+   * using `settings.verifyOptions`. Any default param can be programmatically modified
+   * like follows:
+   *
+   * ```js
+   * customUserModel.getVerifyOptions = function() {
+   *   const base = MyUser.base.getVerifyOptions();
+   *   return Object.assign({}, base, {
+   *     // custom values
+   *   });
+   * }
+   * ```
+   *
+   * Usually you should only require to modify a subset of these params
+   * See `User.verify()` and `User.prototype.verify()` doc for params reference
+   * and their default values.
+   */
+
+  User.getVerifyOptions = function() {
+    const defaultOptions = {
+      type: 'email',
+      from: 'noreply@example.com',
+    };
+    return Object.assign({}, this.settings.verifyOptions || defaultOptions);
+  };
+
+  /**
+   * Verify a user's identity by sending them a confirmation message.
+   * NOTE: Currently only email verification is supported
+   *
+   * ```js
+   * var verifyOptions = {
+   *   type: 'email',
+   *   from: 'noreply@example.com'
+   *   template: 'verify.ejs',
+   *   redirect: '/',
+   *   generateVerificationToken: function (user, options, cb) {
+   *     cb('random-token');
+   *   }
+   * };
+   *
+   * user.verify(verifyOptions);
+   * ```
+   *
+   * NOTE: the User.getVerifyOptions() method can also be used to ease the
+   * building of identity verification options.
+   *
+   * ```js
+   * var verifyOptions = MyUser.getVerifyOptions();
+   * user.verify(verifyOptions);
    * ```
    *
    * @options {Object} verifyOptions
-   * @property {String} type Must be 'email'.
+   * @property {String} type Must be `'email'` in the current implementation.
+   * @property {Function} mailer A mailer function with a static `.send() method.
+   *  The `.send()` method must accept the verifyOptions object, the method's
+   *  remoting context options object and a callback function with `(err, email)`
+   *  as parameters.
+   *  Defaults to provided `userModel.email` function, or ultimately to LoopBack's
+   *  own mailer function.
    * @property {String} to Email address to which verification email is sent.
-   * @property {String} from Sender email addresss, for example
-   *   `'noreply@myapp.com'`.
+   *  Defaults to user's email. Can also be overriden to a static value for test
+   *  purposes.
+   * @property {String} from Sender email address
+   *  For example `'noreply@example.com'`.
    * @property {String} subject Subject line text.
+   *  Defaults to `'Thanks for Registering'` or a local equivalent.
    * @property {String} text Text of email.
-   * @property {String} template Name of template that displays verification
-   *  page, for example, `'verify.ejs'.
+   *  Defaults to `'Please verify your email by opening this link in a web browser:`
+   *  followed by the verify link.
+   * @property {Object} headers Email headers. None provided by default.
+   * @property {String} template Relative path of template that displays verification
+   *  page. Defaults to `'../../templates/verify.ejs'`.
    * @property {Function} templateFn A function generating the email HTML body
-   * from `verify()` options object and generated attributes like `options.verifyHref`.
-   * It must accept the option object and a callback function with `(err, html)`
-   * as parameters
+   *  from `verify()` options object and generated attributes like `options.verifyHref`.
+   *  It must accept the verifyOptions object, the method's remoting context options
+   *  object and a callback function with `(err, html)` as parameters.
+   *  A default templateFn function is provided, see `createVerificationEmailBody()`
+   *  for implementation details.
    * @property {String} redirect Page to which user will be redirected after
-   *  they verify their email, for example `'/'` for root URI.
+   *  they verify their email. Defaults to `'/'`.
+   * @property {String} verifyHref The link to include in the user's verify message.
+   *  Defaults to an url analog to:
+   *  `http://host:port/restApiRoot/userRestPath/confirm?uid=userId&redirect=/``
+   * @property {String} host The API host. Defaults to app's host or `localhost`.
+   * @property {String} protocol The API protocol. Defaults to `'http'`.
+   * @property {Number} port The API port. Defaults to app's port or `3000`.
+   * @property {String} restApiRoot The API root path. Defaults to app's restApiRoot
+   *  or `'/api'`
    * @property {Function} generateVerificationToken A function to be used to
-   *  generate the verification token. It must accept the user object and a
-   *  callback function. This function should NOT add the token to the user
-   *  object, instead simply execute the callback with the token! User saving
-   *  and email sending will be handled in the `verify()` method.
-   * @param {Object} options remote context options.
+   *  generate the verification token.
+   *  It must accept the verifyOptions object, the method's remoting context options
+   *  object and a callback function with `(err, hexStringBuffer)` as parameters.
+   *  This function should NOT add the token to the user object, instead simply
+   *  execute the callback with the token! User saving and email sending will be
+   *  handled in the `verify()` method.
+   *  A default token generation function is provided, see `generateVerificationToken()`
+   *  for implementation details.
    * @callback {Function} cb Callback function.
+   * @param {Object} options remote context options.
    * @param {Error} err Error object.
    * @param {Object} object Contains email, token, uid.
    * @promise
@@ -578,16 +702,22 @@ module.exports = function(User) {
     var user = this;
     var userModel = this.constructor;
     var registry = userModel.registry;
-
+    verifyOptions = Object.assign({}, verifyOptions);
     // final assertion is performed once all options are assigned
     assert(typeof verifyOptions === 'object',
       'verifyOptions object param required when calling user.verify()');
 
+    // Shallow-clone the options object so that we don't override
+    // the global default options object
+    verifyOptions = Object.assign({}, verifyOptions);
+
     // Set a default template generation function if none provided
     verifyOptions.templateFn = verifyOptions.templateFn || createVerificationEmailBody;
+
     // Set a default token generation function if none provided
     verifyOptions.generateVerificationToken = verifyOptions.generateVerificationToken ||
       User.generateVerificationToken;
+
     // Set a default mailer function if none provided
     verifyOptions.mailer = verifyOptions.mailer || userModel.email ||
       registry.getModelByType(loopback.Email);
@@ -609,22 +739,33 @@ module.exports = function(User) {
       (verifyOptions.protocol === 'https' && verifyOptions.port == '443')
     ) ? '' : ':' + verifyOptions.port;
 
-    var urlPath = joinUrlPath(
-      verifyOptions.restApiRoot,
-      userModel.http.path,
-      userModel.sharedClass.findMethodByName('confirm').http.path
-    );
+    if (!verifyOptions.verifyHref) {
+      const confirmMethod = userModel.sharedClass.findMethodByName('confirm');
+      if (!confirmMethod) {
+        throw new Error(
+          'Cannot build user verification URL, ' +
+          'the default confirm method is not public. ' +
+          'Please provide the URL in verifyOptions.verifyHref.'
+        );
+      }
 
-    verifyOptions.verifyHref = verifyOptions.verifyHref ||
-      verifyOptions.protocol +
-      '://' +
-      verifyOptions.host +
-      displayPort +
-      urlPath +
-      '?' + qs.stringify({
-        uid: '' + verifyOptions.user[pkName],
-        redirect: verifyOptions.redirect,
-      });
+      const urlPath = joinUrlPath(
+        verifyOptions.restApiRoot,
+        userModel.http.path,
+        confirmMethod.http.path
+      );
+
+      verifyOptions.verifyHref =
+        verifyOptions.protocol +
+        '://' +
+        verifyOptions.host +
+        displayPort +
+        urlPath +
+        '?' + qs.stringify({
+          uid: '' + verifyOptions.user[pkName],
+          redirect: verifyOptions.redirect,
+        });
+    }
 
     verifyOptions.to = verifyOptions.to || user.email;
     verifyOptions.subject = verifyOptions.subject || g.f('Thanks for Registering');
@@ -652,12 +793,13 @@ module.exports = function(User) {
 
     // TODO - support more verification types
     function sendEmail(user) {
-      verifyOptions.verifyHref += '&token=' + user.verificationToken;
-      verifyOptions.verificationToken = user.verificationToken;
+      verifyOptions.verifyHref +=
+        verifyOptions.verifyHref.indexOf('?') === -1 ? '?' : '&';
+      verifyOptions.verifyHref += 'token=' + user.verificationToken;
 
+      verifyOptions.verificationToken = user.verificationToken;
       verifyOptions.text = verifyOptions.text || g.f('Please verify your email by opening ' +
         'this link in a web browser:\n\t%s', verifyOptions.verifyHref);
-
       verifyOptions.text = verifyOptions.text.replace(/\{href\}/g, verifyOptions.verifyHref);
 
       // argument "options" is passed depending on templateFn function requirements
@@ -874,18 +1016,22 @@ module.exports = function(User) {
 
   User.validatePassword = function(plain) {
     var err;
-    if (plain && typeof plain === 'string' && plain.length <= MAX_PASSWORD_LENGTH) {
-      return true;
-    }
-    if (plain.length > MAX_PASSWORD_LENGTH) {
-      err = new Error(g.f('Password too long: %s', plain));
-      err.code = 'PASSWORD_TOO_LONG';
-    } else {
-      err =  new Error(g.f('Invalid password: %s', plain));
+    if (!plain || typeof plain !== 'string') {
+      err = new Error(g.f('Invalid password.'));
       err.code = 'INVALID_PASSWORD';
+      err.statusCode = 422;
+      throw err;
     }
-    err.statusCode = 422;
-    throw err;
+
+    // Bcrypt only supports up to 72 bytes; the rest is silently dropped.
+    var len = Buffer.byteLength(plain, 'utf8');
+    if (len > MAX_PASSWORD_LENGTH) {
+      err = new Error(g.f('The password entered was too long. Max length is %d (entered %d)',
+        MAX_PASSWORD_LENGTH, len));
+      err.code = 'PASSWORD_TOO_LONG';
+      err.statusCode = 422;
+      throw err;
+    }
   };
 
   User._invalidateAccessTokensOfUsers = function(userIds, options, cb) {
@@ -932,7 +1078,7 @@ module.exports = function(User) {
     this.settings.ttl = this.settings.ttl || DEFAULT_TTL;
 
     UserModel.setter.email = function(value) {
-      if (!UserModel.settings.caseSensitiveEmail) {
+      if (!UserModel.settings.caseSensitiveEmail && typeof value === 'string') {
         this.$email = value.toLowerCase();
       } else {
         this.$email = value;
@@ -1004,9 +1150,21 @@ module.exports = function(User) {
     );
 
     UserModel.remoteMethod(
+      'prototype.verify',
+      {
+        description: 'Trigger user\'s identity verification with configured verifyOptions',
+        accepts: [
+          {arg: 'verifyOptions', type: 'object', http: ctx => this.getVerifyOptions()},
+          {arg: 'options', type: 'object', http: 'optionsFromRequest'},
+        ],
+        http: {verb: 'post'},
+      }
+    );
+
+    UserModel.remoteMethod(
       'confirm',
       {
-        description: 'Confirm a user registration with email verification token.',
+        description: 'Confirm a user registration with identity verification token.',
         accepts: [
           {arg: 'uid', type: 'string', required: true},
           {arg: 'token', type: 'string', required: true},
@@ -1032,9 +1190,7 @@ module.exports = function(User) {
       {
         description: 'Change a user\'s password.',
         accepts: [
-          {arg: 'id', type: 'any',
-            http: ctx => ctx.req.accessToken && ctx.req.accessToken.userId,
-          },
+          {arg: 'id', type: 'any', http: getUserIdFromRequestContext},
           {arg: 'oldPassword', type: 'string', required: true, http: {source: 'form'}},
           {arg: 'newPassword', type: 'string', required: true, http: {source: 'form'}},
           {arg: 'options', type: 'object', http: 'optionsFromRequest'},
@@ -1051,9 +1207,7 @@ module.exports = function(User) {
       {
         description: 'Reset user\'s password via a password-reset token.',
         accepts: [
-          {arg: 'id', type: 'any',
-            http: ctx => ctx.req.accessToken && ctx.req.accessToken.userId,
-          },
+          {arg: 'id', type: 'any', http: getUserIdFromRequestContext},
           {arg: 'newPassword', type: 'string', required: true, http: {source: 'form'}},
           {arg: 'options', type: 'object', http: 'optionsFromRequest'},
         ],
@@ -1061,6 +1215,23 @@ module.exports = function(User) {
         http: {verb: 'POST', path: '/reset-password'},
       }
     );
+
+    function getUserIdFromRequestContext(ctx) {
+      const token = ctx.req.accessToken;
+      if (!token) return;
+
+      const hasPrincipalType = 'principalType' in token;
+      if (hasPrincipalType && token.principalType !== UserModel.modelName) {
+        // We have multiple user models related to the same access token model
+        // and the token used to authorize reset-password request was created
+        // for a different user model.
+        const err = new Error(g.f('Access Denied'));
+        err.statusCode = 403;
+        throw err;
+      }
+
+      return token.userId;
+    }
 
     UserModel.afterRemote('confirm', function(ctx, inst, next) {
       if (ctx.args.redirect !== undefined) {
@@ -1145,7 +1316,8 @@ module.exports = function(User) {
         // This is a programmer's error, use the default status code 500
         return next(new Error(
           'Invalid use of "options.setPassword". Only "password" can be ' +
-          'changed when using this option.'));
+          'changed when using this option.'
+        ));
       }
 
       return next();
@@ -1157,7 +1329,8 @@ module.exports = function(User) {
 
     const err = new Error(
       'Changing user password via patch/replace API is not allowed. ' +
-      'Use changePassword() or setPassword() instead.');
+      'Use changePassword() or setPassword() instead.'
+    );
     err.statusCode = 401;
     err.code = 'PASSWORD_CHANGE_NOT_ALLOWED';
     next(err);
@@ -1211,6 +1384,8 @@ module.exports = function(User) {
     var newPassword = (ctx.instance || ctx.data).password;
 
     if (!newEmail && !newPassword) return next();
+
+    if (ctx.options.preserveAccessTokens) return next();
 
     var userIdsToExpire = ctx.hookState.originalUserData.filter(function(u) {
       return (newEmail && u.email !== newEmail) ||

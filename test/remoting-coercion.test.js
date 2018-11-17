@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2014,2016. All Rights Reserved.
+// Copyright IBM Corp. 2014,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -16,8 +16,7 @@ describe('remoting coercion', function() {
 
     var TestModel = app.registry.createModel('TestModel',
       {},
-      {base: 'Model'}
-    );
+      {base: 'Model'});
     app.model(TestModel, {public: true});
 
     TestModel.test = function(inst, cb) {

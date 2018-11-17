@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2014,2016. All Rights Reserved.
+// Copyright IBM Corp. 2014,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -11,7 +11,8 @@ var request = require('supertest');
 describe('hidden properties', function() {
   beforeEach(function(done) {
     var app = this.app = loopback();
-    var Product = this.Product = loopback.PersistedModel.extend('product',
+    var Product = this.Product = loopback.PersistedModel.extend(
+      'product',
       {},
       {hidden: ['secret']}
     );
@@ -44,17 +45,17 @@ describe('hidden properties', function() {
 
   it('should hide a property remotely', function(done) {
     request(this.app)
-       .get('/products')
-       .expect('Content-Type', /json/)
-       .expect(200)
-       .end(function(err, res) {
-         if (err) return done(err);
+      .get('/products')
+      .expect('Content-Type', /json/)
+      .expect(200)
+      .end(function(err, res) {
+        if (err) return done(err);
 
-         var product = res.body[0];
-         assert.equal(product.secret, undefined);
+        var product = res.body[0];
+        assert.equal(product.secret, undefined);
 
-         done();
-       });
+        done();
+      });
   });
 
   it('should hide a property of nested models', function(done) {

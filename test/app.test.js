@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013,2016. All Rights Reserved.
+// Copyright IBM Corp. 2013,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -17,11 +17,12 @@ var describe = require('./util/describe');
 var expect = require('./helpers/expect');
 var it = require('./util/it');
 var request = require('supertest');
+const sinon = require('sinon');
 
 describe('app', function() {
   var app;
   beforeEach(function() {
-    app = loopback();
+    app = loopback({localRegistry: true, loadBuiltinModels: true});
   });
 
   describe.onServer('.middleware(phase, handler)', function() {
@@ -222,7 +223,8 @@ describe('app', function() {
           expect(steps).to.eql(['/scope', '/scope/item']);
 
           done();
-        });
+        }
+      );
     });
 
     it('scopes middleware to a regex path', function(done) {
@@ -237,7 +239,8 @@ describe('app', function() {
           expect(steps).to.eql(['/a', '/b']);
 
           done();
-        });
+        }
+      );
     });
 
     it('scopes middleware to a list of scopes', function(done) {
@@ -252,7 +255,8 @@ describe('app', function() {
           expect(steps).to.eql(['/a', '/b', '/scope']);
 
           done();
-        });
+        }
+      );
     });
 
     it('sets req.url to a sub-path', function(done) {
@@ -523,7 +527,7 @@ describe('app', function() {
       });
     });
 
-    it('scopes middleware to a list of scopes', function(done) {
+    it('scopes middleware from config to a list of scopes', function(done) {
       var steps = [];
       app.middlewareFromConfig(
         function factory() {
@@ -536,7 +540,8 @@ describe('app', function() {
         {
           phase: 'initial',
           paths: ['/scope', /^\/(a|b)/],
-        });
+        }
+      );
 
       async.eachSeries(
         ['/', '/a', '/b', '/c', '/scope', '/other'],
@@ -547,7 +552,8 @@ describe('app', function() {
           expect(steps).to.eql(['/a', '/b', '/scope']);
 
           done();
-        });
+        }
+      );
     });
   });
 
@@ -713,17 +719,6 @@ describe('app', function() {
       expect(remoteMethodAddedClass).to.eql(Book.sharedClass);
     });
 
-    it.onServer('updates REST API when a new model is added', function(done) {
-      app.use(loopback.rest());
-      request(app).get('/colors').expect(404, function(err, res) {
-        if (err) return done(err);
-        var Color = PersistedModel.extend('color', {name: String});
-        app.model(Color);
-        Color.attachTo(db);
-        request(app).get('/colors').expect(200, done);
-      });
-    });
-
     it('accepts null dataSource', function(done) {
       app.model(MyTestModel, {dataSource: null});
       expect(MyTestModel.dataSource).to.eql(null);
@@ -763,6 +758,66 @@ describe('app', function() {
     });
   });
 
+  describe('app.deleteModelByName()', () => {
+    let TestModel;
+    beforeEach(setupTestModel);
+
+    it('removes the model from app registries', () => {
+      expect(Object.keys(app.models))
+        .to.contain('test-model')
+        .and.contain('TestModel')
+        .and.contain('testModel');
+      expect(app.models().map(m => m.modelName))
+        .to.contain('test-model');
+
+      app.deleteModelByName('test-model');
+
+      expect(Object.keys(app.models))
+        .to.not.contain('test-model')
+        .and.not.contain('TestModel')
+        .and.not.contain('testModel');
+      expect(app.models().map(m => m.modelName))
+        .to.not.contain('test-model');
+    });
+
+    it('removes the model from juggler registries', () => {
+      expect(Object.keys(app.registry.modelBuilder.models))
+        .to.contain('test-model');
+
+      app.deleteModelByName('test-model');
+
+      expect(Object.keys(app.registry.modelBuilder.models))
+        .to.not.contain('test-model');
+    });
+
+    it('removes the model from remoting registries', () => {
+      expect(Object.keys(app.remotes()._classes))
+        .to.contain('test-model');
+
+      app.deleteModelByName('test-model');
+
+      expect(Object.keys(app.remotes()._classes))
+        .to.not.contain('test-model');
+    });
+
+    it('emits "modelDeleted" event', () => {
+      const spy = sinon.spy();
+      app.on('modelDeleted', spy);
+
+      app.deleteModelByName('test-model');
+
+      sinon.assert.calledWith(spy, TestModel);
+    });
+
+    function setupTestModel() {
+      TestModel = app.registry.createModel({
+        name: 'test-model',
+        base: 'Model',
+      });
+      app.model(TestModel, {dataSource: null});
+    }
+  });
+
   describe('app.models', function() {
     it('is unique per app instance', function() {
       app.dataSource('db', {connector: 'memory'});
@@ -787,7 +842,7 @@ describe('app', function() {
     it('looks up the connector in `app.connectors`', function() {
       app.connector('custom', loopback.Memory);
       app.dataSource('custom', {connector: 'custom'});
-      expect(app.dataSources.custom.name).to.equal(loopback.Memory.name);
+      expect(app.dataSources.custom.name).to.equal('custom');
     });
 
     it('adds data source name to error messages', function() {
@@ -839,8 +894,7 @@ describe('app', function() {
       app.set('host', undefined);
 
       app.listen(function() {
-        var host = process.platform === 'win32' ? 'localhost' : app.get('host');
-        var expectedUrl = 'http://' + host + ':' + app.get('port') + '/';
+        var expectedUrl = 'http://localhost:' + app.get('port') + '/';
         expect(app.get('url'), 'url').to.equal(expectedUrl);
 
         done();
@@ -858,17 +912,15 @@ describe('app', function() {
       });
     });
 
-    it('forwards to http.Server.listen when the single arg is not a function',
-      function(done) {
-        var app = loopback();
-        app.set('port', 1);
-        app.listen(0).on('listening', function() {
-          expect(app.get('port'), 'port') .to.not.equal(0).and.not.equal(1);
+    it('forwards to http.Server.listen when the single arg is not a function', function(done) {
+      var app = loopback();
+      app.set('port', 1);
+      app.listen(0).on('listening', function() {
+        expect(app.get('port'), 'port') .to.not.equal(0).and.not.equal(1);
 
-          done();
-        });
-      }
-    );
+        done();
+      });
+    });
 
     it('uses app config when no parameter is supplied', function(done) {
       var app = loopback();
@@ -1010,25 +1062,120 @@ describe('app', function() {
     expect(app.loopback).to.equal(loopback);
   });
 
-  describe('normalizeHttpPath option', function() {
-    var app, db;
+  function setupUserModels(app, options, done) {
+    app.dataSource('db', {connector: 'memory'});
+    var UserAccount = app.registry.createModel(
+      'UserAccount',
+      {name: 'string'},
+      options
+    );
+    var UserRole = app.registry.createModel(
+      'UserRole',
+      {name: 'string'}
+    );
+    app.model(UserAccount, {dataSource: 'db'});
+    app.model(UserRole, {dataSource: 'db'});
+    UserAccount.hasMany(UserRole);
+    UserAccount.create({
+      name: 'user',
+    }, function(err, user) {
+      if (err) return done(err);
+      app.use(loopback.rest());
+      done();
+    });
+  }
+
+  describe('Model-level normalizeHttpPath option', function() {
+    var app;
     beforeEach(function() {
       app = loopback();
-      db = loopback.createDataSource({connector: loopback.Memory});
     });
 
-    it.onServer('normalizes the http path', function(done) {
-      var UserAccount = PersistedModel.extend(
-        'UserAccount',
-        {name: String},
-        {
-          remoting: {normalizeHttpPath: true},
+    it.onServer('honours Model-level setting of `false`', function(done) {
+      setupUserModels(app, {
+        remoting: {normalizeHttpPath: false},
+      }, function(err) {
+        if (err) return done(err);
+        request(app).get('/UserAccounts').expect(200, function(err) {
+          if (err) return done(err);
+          request(app).get('/UserAccounts/1/userRoles').expect(200, function(err) {
+            if (err) return done(err);
+            done();
+          });
         });
-      app.model(UserAccount);
-      UserAccount.attachTo(db);
+      });
+    });
 
-      app.use(loopback.rest());
-      request(app).get('/user-accounts').expect(200, done);
+    it.onServer('honours Model-level setting of `true`', function(done) {
+      setupUserModels(app, {
+        remoting: {normalizeHttpPath: true},
+      }, function(err) {
+        if (err) return done(err);
+        request(app).get('/user-accounts').expect(200, function(err) {
+          if (err) return done(err);
+          request(app).get('/user-accounts/1/user-roles').expect(200, function(err) {
+            if (err) return done(err);
+            done();
+          });
+        });
+      });
+    });
+  });
+  describe('app-level normalizeHttpPath option', function() {
+    var app;
+    beforeEach(function() {
+      app = loopback();
+    });
+
+    it.onServer('honours app-level setting of `false`', function(done) {
+      app.set('remoting', {rest: {normalizeHttpPath: false}});
+      setupUserModels(app, null, function(err) {
+        if (err) return done(err);
+        request(app).get('/UserAccounts').expect(200, function(err) {
+          if (err) return done(err);
+          request(app).get('/UserAccounts/1/userRoles').expect(200, function(err) {
+            if (err) return done(err);
+            done();
+          });
+        });
+      });
+    });
+
+    it.onServer('honours app-level setting of `true`', function(done) {
+      app.set('remoting', {rest: {normalizeHttpPath: true}});
+      setupUserModels(app, null, function(err) {
+        if (err) return done(err);
+        request(app).get('/user-accounts').expect(200, function(err) {
+          if (err) return done(err);
+          request(app).get('/user-accounts/1/user-roles').expect(200, function(err) {
+            if (err) return done(err);
+            done();
+          });
+        });
+      });
+    });
+  });
+
+  describe('Model-level and app-level normalizeHttpPath options', function() {
+    var app;
+    beforeEach(function() {
+      app = loopback();
+    });
+
+    it.onServer('prioritizes Model-level setting over the app-level one', function(done) {
+      app.set('remoting', {rest: {normalizeHttpPath: true}});
+      setupUserModels(app, {
+        remoting: {normalizeHttpPath: false},
+      }, function(err) {
+        if (err) return done(err);
+        request(app).get('/UserAccounts').expect(200, function(err) {
+          if (err) return done(err);
+          request(app).get('/UserAccounts/1/userRoles').expect(200, function(err) {
+            if (err) return done(err);
+            done();
+          });
+        });
+      });
     });
   });
 });

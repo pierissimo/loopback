@@ -1,3 +1,363 @@
+2018-11-15, Version 3.24.0
+==========================
+
+ * Set juggler options for remote calls (Raymond Feng)
+
+ * Speed up ACL tests by reducing saltWorkFactor (Miroslav Bajtoš)
+
+
+2018-10-25, Version 3.23.2
+==========================
+
+ * Fix ACL check to support model wildcard (Moshe Malka)
+
+
+2018-10-18, Version 3.23.1
+==========================
+
+ * README: highlight Active LTS at the top (Miroslav Bajtoš)
+
+
+2018-10-09, Version 3.23.0
+==========================
+
+ * Clear handler cache when a method is added/removed (Mohammed Essehemy)
+
+ * Add `options.preserveAccessTokens` (lchaglla)
+
+ * Update LB3 to be active LTS (Diana Lau)
+
+ * Fix ACL tests to wait until all assertions finish (Moshe Malka)
+
+ * chore: update to latest linting rules (virkt25)
+
+
+2018-09-12, Version 3.22.3
+==========================
+
+ * chore: use grunt to install optional  phantomjs (virkt25)
+
+ * [WebFM] fr translation (candytangnb)
+
+
+2018-08-29, Version 3.22.2
+==========================
+
+ * [WebFM] tr translation (candytangnb)
+
+ * [WebFM] de translation (candytangnb)
+
+ * [WebFM] cs/es/fr/it/nl/pl/pt_BR/ru translation (candytangnb)
+
+
+2018-08-22, Version 3.22.1
+==========================
+
+ * [WebFM] ja/ko/zh_CN/zh_TW translation (candytangnb)
+
+ * remove unnecessary format call (Diana Lau)
+
+ * Make desc when export-api-def translatable (Diana Lau)
+
+
+2018-08-08, Version 3.22.0
+==========================
+
+ * fix: accessToken create default acl (virkt25)
+
+ * add: ppc64 and s390x to not run UI tests (Thomas Leah)
+
+ * chore: update deps + fix linting + .npmrc (virkt25)
+
+ * Update Loopback 2.x EOL dates (Chris Bailey)
+
+ * Fix formatting (Chris Bailey)
+
+ * Update support badge and move LTS section (Chris Bailey)
+
+ * Add badges and information for LTS and support (Chris Bailey)
+
+
+2018-07-09, Version 3.21.0
+==========================
+
+ * Make verifyUserRelations() more robust (mcitdev)
+
+ * Fix crash in verifyUserRelations (ryanxwelch)
+
+ * Fix crash in User model's "before delete" hook (mcitdev)
+
+ * [WebFM] cs/pl/ru translation (candytangnb)
+
+ * Update strong-error-handler (shimks)
+
+
+2018-06-12, Version 3.20.0
+==========================
+
+ * Update strong-globalize to 4.x (Miroslav Bajtoš)
+
+ * Update nodemailer to v4.x (Dimitris)
+
+ * Drop support for Node.js 4.x (Miroslav Bajtoš)
+
+
+2018-06-04, Version 3.19.3
+==========================
+
+ * Provide link to CODEOWNERS (Aditya Agarwal)
+
+ * fix bug in User.verify when confirm is disabled (wolrajhti)
+
+ * Enable Node.js 10.x on Travis CI (Miroslav Bajtoš)
+
+
+2018-05-29, Version 3.19.2
+==========================
+
+ * Add check for undefined user email in setter (Kevin Scroggins)
+
+
+2018-05-21, Version 3.19.1
+==========================
+
+ * Fix isOwner() bug in multiple-principal setup (Miroslav Bajtoš)
+
+
+2018-04-17, Version 3.19.0
+==========================
+
+ * feat: remove all references to a Model (Miroslav Bajtoš)
+
+
+2018-03-22, Version 3.18.3
+==========================
+
+ * Remove forgotten debugger statement (Miroslav Bajtoš)
+
+ * Fix role check in apps with multiple user models (Miroslav Bajtoš)
+
+ * Fix formatting issues reported by recent eslint (Miroslav Bajtoš)
+
+ * CODEOWNERS: add nitro404 (Miroslav Bajtoš)
+
+ * test: add missing "return" in a promise-style test (Miroslav Bajtoš)
+
+
+2018-02-08, Version 3.18.2
+==========================
+
+ * model: fix infinite loop on nestRemoting (Kevin Delisle)
+
+ * Use statusCode prop for user errors (Zak Barbuto)
+
+
+2018-01-31, Version 3.18.1
+==========================
+
+ * update: juggler to version including security fix. (Taranveer Virk)
+
+
+2018-01-29, Version 3.18.0
+==========================
+
+ * fix: preserve datasource name (Kevin Scroggins)
+
+ * Update Copyright Years (Justin Ross)
+
+ * Support options.filter in createChangeStream (Edward Choh)
+
+ * fixup! add top-level dep on eslint-plugin-mocha (Miroslav Bajtoš)
+
+ * Update eslint and eslint-config to latest (Miroslav Bajtoš)
+
+
+2017-12-12, Version 3.17.1
+==========================
+
+ * Update nestRemoting to pass optionsFromContext (bmatson)
+
+ * fix(test): rem exclusive test (Samuel Reed)
+
+ * fix(test): working test with 0 userId (Samuel Reed)
+
+ * fix(AccessContext): Tighten userid/appid checks (Samuel Reed)
+
+ * fix(id): replace with != null (Samuel Reed)
+
+
+2017-11-29, Version 3.17.0
+==========================
+
+ * Added missing DateString type in loopback index (CSLTech)
+
+ * chore:update license (Diana Lau)
+
+
+2017-10-30, Version 3.16.2
+==========================
+
+ * Fix "POST /change-password" for multi-user setup (Miroslav Bajtoš)
+
+
+2017-10-27, Version 3.16.1
+==========================
+
+ * Fix createOnlyInstance for related methods (Raymond Feng)
+
+
+2017-10-24, Version 3.16.0
+==========================
+
+ * Fix "POST /reset-password" for multi-user setup (Miroslav Bajtoš)
+
+ * test: extract helpers for logging HTTP errors (Miroslav Bajtoš)
+
+ * CODEOWNERS: move @lehni to Alumni section (Miroslav Bajtoš)
+
+
+2017-10-13, Version 3.15.0
+==========================
+
+ * update strong-globalize to 3.1.0 (shimks)
+
+ * Fix handling of user verification options (Miroslav Bajtoš)
+
+ * Handle missing getUpdateOnlyProperties fn (Jürg Lehni)
+
+ * test: fix too strict test assertion (Miroslav Bajtoš)
+
+ * Fix typo (Siegfried Ehret)
+
+
+2017-09-28, Version 3.14.0
+==========================
+
+ * Allow declarative nestRemoting for relations (Raymond Feng)
+
+
+2017-09-27, Version 3.13.0
+==========================
+
+ * Fix OWNER role to handle multiple relations (pierreclr)
+
+ * Fix acl.resolvePermission for wildcard req (Farid Neshat)
+
+ * CODEOWNERS: add zbarbuto (Miroslav Bajtoš)
+
+
+2017-09-25, Version 3.12.0
+==========================
+
+ * Fix relation race condition in model glob (Zak Barbuto)
+
+ * CODEOWNERS: add lehni (Miroslav Bajtoš)
+
+
+2017-08-23, Version 3.11.1
+==========================
+
+ * Handle missing getUpdateOnlyProperties fn (Kevin Delisle)
+
+
+2017-08-22, Version 3.11.0
+==========================
+
+ * Support createOnlyInstance in model (#3548) (Rashmi Hunt)
+
+ * Add stalebot configuration (Kevin Delisle)
+
+ * Catch errors on invalidate update (loay)
+
+ * Update Issue and PR Templates (#3568) (Sakib Hasan)
+
+
+2017-08-16, Version 3.10.1
+==========================
+
+ * fix(validatePassword): reword error message (Samuel Reed)
+
+ * Do not add isStatic properties to method settings (Jürg Lehni)
+
+
+2017-08-14, Version 3.10.0
+==========================
+
+ * Allow glob-style patterns for remote options (Zak Barbuto)
+
+ * Fix case of values per doc issue (crandmck)
+
+ * Update translated strings Q3 2017 (Allen Boone)
+
+ * Revert "Validate on updateAll" (Sakib Hasan)
+
+ * Add tests of HTTP normalization on app level (Jürg Lehni)
+
+ * travis: drop Node.js 7.x, add 8.x (Miroslav Bajtoš)
+
+ * Validate on updateAll (ssh24)
+
+ * Update juggler version (loay)
+
+ * update messages.json (Diana Lau)
+
+ * small fix for the title (Michael Alaev)
+
+ * Changed http to https (Michael Alaev)
+
+ * Update Travis registry (loay)
+
+ * Add unit test for empty password (loay)
+
+ * Add CODEOWNER file (Diana Lau)
+
+
+2017-07-12, Version 3.9.0
+=========================
+
+ * Remove observers from Model on end of the stream (Alexei Smirnov)
+
+ * Fix Model#settings.acls doc type signature (Farid Nouri Neshat)
+
+ * Use `localhost` instead of `::` for local (Daijiro Wachi)
+
+ * Fix API doc for Model class property type (Candy)
+
+ * Update package.json (sqlwwx)
+
+ * Support remoting adapters with no ctx.req object (Piero Maltese)
+
+ * update strong-error-handler (sqlwwx)
+
+
+2017-05-02, Version 3.8.0
+=========================
+
+ * Refactor access token to make it extensible (Raymond Feng)
+
+
+2017-04-27, Version 3.7.0
+=========================
+
+ * Remote method /user/:id/verify (ebarault)
+
+ * Implement more secure password flow (Miroslav Bajtoš)
+
+ * Add User.setPassword(id, new, cb) (Miroslav Bajtoš)
+
+ * Fix method setup in authorization-scopes.test (Miroslav Bajtoš)
+
+ * Add missing tests for reset password flow (Miroslav Bajtoš)
+
+ * forwarding context options in user.verify (ebarault)
+
+ * update deprecated dependencies (Diana Lau)
+
+ * Add support for scoped access tokens (Miroslav Bajtoš)
+
+ * Fix user-literal rewrite for anonymous requests (Aaron Buchanan)
+
+
 2017-03-31, Version 3.6.0
 =========================
 

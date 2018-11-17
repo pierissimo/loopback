@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2014,2016. All Rights Reserved.
+// Copyright IBM Corp. 2014,2018. All Rights Reserved.
 // Node module: loopback
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
@@ -133,8 +133,8 @@ describe('remoting - integration', function() {
 
     it('should have correct signatures for hasMany methods',
       function() {
-        var physicianClass = findClass('store');
-        var methods = getFormattedPrototypeMethods(physicianClass.methods);
+        var storeClass = findClass('store');
+        var methods = getFormattedPrototypeMethods(storeClass.methods);
 
         var expectedMethods = [
           'prototype.__findById__widgets(fk:any):widget ' +
@@ -194,6 +194,30 @@ describe('remoting - integration', function() {
     ];
     expect(methods).to.include.members(expectedMethods);
   });
+
+  describe('createOnlyInstance', function() {
+    it('sets createOnlyInstance to true if id is generated and forceId is not set to false',
+      function() {
+        var storeClass = findClass('store');
+        var createMethod = getCreateMethod(storeClass.methods);
+        assert(createMethod.accepts[0].createOnlyInstance === true);
+      });
+
+    it('sets createOnlyInstance to false if forceId is set to false in the model', function() {
+      var customerClass = findClass('customerforceidfalse');
+      var createMethod = getCreateMethod(customerClass.methods);
+      assert(createMethod.accepts[0].createOnlyInstance === false);
+    });
+
+    it('sets createOnlyInstance based on target model for scoped or related methods',
+      function() {
+        var userClass = findClass('user');
+        var createMethod = userClass.methods.find(function(m) {
+          return (m.name === 'prototype.__create__accessTokens');
+        });
+        assert(createMethod.accepts[0].createOnlyInstance === false);
+      });
+  });
 });
 
 describe('With model.settings.replaceOnPUT false', function() {
@@ -204,33 +228,33 @@ describe('With model.settings.replaceOnPUT false', function() {
   });
 
   it('should have expected remote methods',
-  function() {
-    var storeClass = findClass('storeWithReplaceOnPUTfalse');
-    var methods = getFormattedMethodsExcludingRelations(storeClass.methods);
+    function() {
+      var storeClass = findClass('storeWithReplaceOnPUTfalse');
+      var methods = getFormattedMethodsExcludingRelations(storeClass.methods);
 
-    var expectedMethods = [
-      'create(data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse POST /stores-updating',
-      'patchOrCreate(data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse PUT /stores-updating',
-      'patchOrCreate(data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse PATCH /stores-updating',
-      'replaceOrCreate(data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse POST /stores-updating/replaceOrCreate',
-      'upsertWithWhere(where:object,data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse POST /stores-updating/upsertWithWhere',
-      'exists(id:any):boolean GET /stores-updating/:id/exists',
-      'exists(id:any):boolean HEAD /stores-updating/:id',
-      'findById(id:any,filter:object):storeWithReplaceOnPUTfalse GET /stores-updating/:id',
-      'replaceById(id:any,data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse POST /stores-updating/:id/replace',
-      'find(filter:object):storeWithReplaceOnPUTfalse GET /stores-updating',
-      'findOne(filter:object):storeWithReplaceOnPUTfalse GET /stores-updating/findOne',
-      'updateAll(where:object,data:object:storeWithReplaceOnPUTfalse):object POST /stores-updating/update',
-      'deleteById(id:any):object DELETE /stores-updating/:id',
-      'count(where:object):number GET /stores-updating/count',
-      'prototype.patchAttributes(data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse PUT /stores-updating/:id',
-      'prototype.patchAttributes(data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse PATCH /stores-updating/:id',
-      'createChangeStream(options:object):ReadableStream POST /stores-updating/change-stream',
-      'createChangeStream(options:object):ReadableStream GET /stores-updating/change-stream',
-    ];
+      var expectedMethods = [
+        'create(data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse POST /stores-updating',
+        'patchOrCreate(data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse PUT /stores-updating',
+        'patchOrCreate(data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse PATCH /stores-updating',
+        'replaceOrCreate(data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse POST /stores-updating/replaceOrCreate',
+        'upsertWithWhere(where:object,data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse POST /stores-updating/upsertWithWhere',
+        'exists(id:any):boolean GET /stores-updating/:id/exists',
+        'exists(id:any):boolean HEAD /stores-updating/:id',
+        'findById(id:any,filter:object):storeWithReplaceOnPUTfalse GET /stores-updating/:id',
+        'replaceById(id:any,data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse POST /stores-updating/:id/replace',
+        'find(filter:object):storeWithReplaceOnPUTfalse GET /stores-updating',
+        'findOne(filter:object):storeWithReplaceOnPUTfalse GET /stores-updating/findOne',
+        'updateAll(where:object,data:object:storeWithReplaceOnPUTfalse):object POST /stores-updating/update',
+        'deleteById(id:any):object DELETE /stores-updating/:id',
+        'count(where:object):number GET /stores-updating/count',
+        'prototype.patchAttributes(data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse PUT /stores-updating/:id',
+        'prototype.patchAttributes(data:object:storeWithReplaceOnPUTfalse):storeWithReplaceOnPUTfalse PATCH /stores-updating/:id',
+        'createChangeStream(options:object):ReadableStream POST /stores-updating/change-stream',
+        'createChangeStream(options:object):ReadableStream GET /stores-updating/change-stream',
+      ];
 
-    expect(methods).to.eql(expectedMethods);
-  });
+      expect(methods).to.eql(expectedMethods);
+    });
 });
 
 describe('With model.settings.replaceOnPUT true', function() {
@@ -241,21 +265,21 @@ describe('With model.settings.replaceOnPUT true', function() {
   });
 
   it('should have expected remote methods',
-  function() {
-    var storeClass = findClass('storeWithReplaceOnPUTtrue');
-    var methods = getFormattedMethodsExcludingRelations(storeClass.methods);
+    function() {
+      var storeClass = findClass('storeWithReplaceOnPUTtrue');
+      var methods = getFormattedMethodsExcludingRelations(storeClass.methods);
 
-    var expectedMethods = [
-      'patchOrCreate(data:object:storeWithReplaceOnPUTtrue):storeWithReplaceOnPUTtrue PATCH /stores-replacing',
-      'replaceOrCreate(data:object:storeWithReplaceOnPUTtrue):storeWithReplaceOnPUTtrue POST /stores-replacing/replaceOrCreate',
-      'replaceOrCreate(data:object:storeWithReplaceOnPUTtrue):storeWithReplaceOnPUTtrue PUT /stores-replacing',
-      'replaceById(id:any,data:object:storeWithReplaceOnPUTtrue):storeWithReplaceOnPUTtrue POST /stores-replacing/:id/replace',
-      'replaceById(id:any,data:object:storeWithReplaceOnPUTtrue):storeWithReplaceOnPUTtrue PUT /stores-replacing/:id',
-      'prototype.patchAttributes(data:object:storeWithReplaceOnPUTtrue):storeWithReplaceOnPUTtrue PATCH /stores-replacing/:id',
-    ];
+      var expectedMethods = [
+        'patchOrCreate(data:object:storeWithReplaceOnPUTtrue):storeWithReplaceOnPUTtrue PATCH /stores-replacing',
+        'replaceOrCreate(data:object:storeWithReplaceOnPUTtrue):storeWithReplaceOnPUTtrue POST /stores-replacing/replaceOrCreate',
+        'replaceOrCreate(data:object:storeWithReplaceOnPUTtrue):storeWithReplaceOnPUTtrue PUT /stores-replacing',
+        'replaceById(id:any,data:object:storeWithReplaceOnPUTtrue):storeWithReplaceOnPUTtrue POST /stores-replacing/:id/replace',
+        'replaceById(id:any,data:object:storeWithReplaceOnPUTtrue):storeWithReplaceOnPUTtrue PUT /stores-replacing/:id',
+        'prototype.patchAttributes(data:object:storeWithReplaceOnPUTtrue):storeWithReplaceOnPUTtrue PATCH /stores-replacing/:id',
+      ];
 
-    expect(methods).to.include.members(expectedMethods);
-  });
+      expect(methods).to.include.members(expectedMethods);
+    });
 });
 
 function formatReturns(m) {
@@ -308,11 +332,17 @@ function getFormattedMethodsExcludingRelations(methods) {
   return methods.filter(function(m) {
     return m.name.indexOf('__') === -1;
   })
-  .map(function(m) {
-    return formatMethod(m);
-  })
-  .reduce(function(p, c) {
-    return p.concat(c);
+    .map(function(m) {
+      return formatMethod(m);
+    })
+    .reduce(function(p, c) {
+      return p.concat(c);
+    });
+}
+
+function getCreateMethod(methods) {
+  return methods.find(function(m) {
+    return (m.name === 'create');
   });
 }
 
@@ -320,22 +350,22 @@ function getFormattedScopeMethods(methods) {
   return methods.filter(function(m) {
     return m.name.indexOf('__') === 0;
   })
-  .map(function(m) {
-    return formatMethod(m);
-  })
-  .reduce(function(p, c) {
-    return p.concat(c);
-  });
+    .map(function(m) {
+      return formatMethod(m);
+    })
+    .reduce(function(p, c) {
+      return p.concat(c);
+    });
 }
 
 function getFormattedPrototypeMethods(methods) {
   return methods.filter(function(m) {
     return m.name.indexOf('prototype.__') === 0;
   })
-  .map(function(m) {
-    return formatMethod(m);
-  })
-  .reduce(function(p, c) {
-    return p.concat(c);
-  });
+    .map(function(m) {
+      return formatMethod(m);
+    })
+    .reduce(function(p, c) {
+      return p.concat(c);
+    });
 }
